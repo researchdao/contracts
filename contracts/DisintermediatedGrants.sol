@@ -69,23 +69,21 @@ contract DisintermediatedGrants is Ownable {
         });
 
         donations[donationCount] = donation;
-        IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
-
         donationCount += 1;
 
         emit Donate(donation);
+        IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
     function withdrawDonation(uint256 _donationId) public {
         Donation storage donation = donations[_donationId];
         require(msg.sender == donation.donor, "caller is not donor");
-        if (donation.amount > donation.disbursedAmount) {
-            IERC20Metadata(donation.token).transferFrom(address(this), donation.donor, donation.amount - donation.disbursedAmount);
-        }
+        require(donation.amount > donation.disbursedAmount, "donation has already been disbursed");
 
         donation.withdrawn = true;
 
         emit WithdrawDonation(donation);
+        IERC20Metadata(donation.token).transferFrom(address(this), donation.donor, donation.amount - donation.disbursedAmount);
     }
 
     function proposeGrant(
@@ -123,11 +121,10 @@ contract DisintermediatedGrants is Ownable {
         require(block.number >= grant.endorsedAt + donationGracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
 
-        IERC20Metadata(donation.token).transferFrom(address(this), grant.recipient, grant.amount);
-
         donation.disbursedAmount += grant.amount;
         grant.disbursed = true;
 
         emit DisburseGrant(grant);
+        IERC20Metadata(donation.token).transferFrom(address(this), grant.recipient, grant.amount);
     }
 }
