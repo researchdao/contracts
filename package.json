@@ -1,0 +1,11 @@
+{
+  "name": "contracts",
+  "version": "1.0.0",
+  "description": "ReaseachDAO smart contracts.",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx hardhat test"
+  },
+  "author": "researchdao",
+  "license": "MIT"
+}
