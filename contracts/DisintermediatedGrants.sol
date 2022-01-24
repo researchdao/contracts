@@ -11,6 +11,14 @@ contract DisintermediatedGrants is Ownable {
     uint256 public donationCount = 0;
     uint256 public grantCount = 0;
 
+    struct Donation {
+        address donor;
+        address token;
+        uint256 amount;
+        uint256 disbursedAmount;
+        bool withdrawn;
+    }
+
     struct Grant {
         uint256 donationId;
         address recipient;
@@ -18,14 +26,6 @@ contract DisintermediatedGrants is Ownable {
         bool endorsed;
         bool disbursed;
         uint256 endorsedAt;
-    }
-
-    struct Donation {
-        address donor;
-        address token;
-        uint256 amount;
-        uint256 disbursedAmount;
-        bool withdrawn;
     }
 
     mapping(address => bool) public donorWhitelisted;
@@ -56,7 +56,6 @@ contract DisintermediatedGrants is Ownable {
 
     function whitelistDonor(address _donor) public onlyOwner {
         donorWhitelisted[_donor] = true;
-
         emit WhitelistDonor(_donor);
     }
 
@@ -73,6 +72,7 @@ contract DisintermediatedGrants is Ownable {
         IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
 
         donationCount += 1;
+
         emit Donate(donation);
     }
 
@@ -84,6 +84,7 @@ contract DisintermediatedGrants is Ownable {
         }
 
         donation.withdrawn = true;
+
         emit WithdrawDonation(donation);
     }
 
@@ -111,7 +112,6 @@ contract DisintermediatedGrants is Ownable {
         Grant storage grant = grants[grantId];
         grant.endorsed = true;
         grant.endorsedAt = block.number;
-
         emit EndorseGrant(grant);
     }
 
@@ -127,6 +127,7 @@ contract DisintermediatedGrants is Ownable {
 
         donation.disbursedAmount += grant.amount;
         grant.disbursed = true;
+
         emit DisburseGrant(grant);
     }
 }
