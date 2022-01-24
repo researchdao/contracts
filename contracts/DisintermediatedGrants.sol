@@ -109,15 +109,15 @@ contract DisintermediatedGrants is Ownable {
         emit ProposeGrant(grant);
     }
 
-    function endorseGrant(uint256 grantId) public onlyMultisig {
-        Grant storage grant = grants[grantId];
+    function endorseGrant(uint256 _grantId) public onlyMultisig {
+        Grant storage grant = grants[_grantId];
         grant.endorsed = true;
         grant.endorsedAt = block.number;
         emit EndorseGrant(grant);
     }
 
-    function disburseGrant(uint256 grantId) public {
-        Grant storage grant = grants[grantId];
+    function disburseGrant(uint256 _grantId) public {
+        Grant storage grant = grants[_grantId];
         Donation storage donation = donations[grant.donationId];
         require(donation.withdrawn, "donation has been withdrawn");
         require(grant.endorsed, "grant has not been endorsed");
