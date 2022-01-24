@@ -116,6 +116,12 @@ contract DisintermediatedGrants is Ownable {
         emit EndorseGrant(grant);
     }
 
+    function endorseGrants(uint256[] memory _grantIds) public {
+        for (uint16 i = 0; i < _grantIds.length; ++i) {
+            endorseGrant(_grantIds[i]);
+        }
+    }
+
     function disburseGrant(uint256 _grantId) public {
         Grant storage grant = grants[_grantId];
         Donation storage donation = donations[grant.donationId];
