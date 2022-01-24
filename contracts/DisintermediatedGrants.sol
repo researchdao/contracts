@@ -18,19 +18,17 @@ contract DisintermediatedGrants is Ownable {
         bool endorsed;
         bool disbursed;
         uint256 endorsedAt;
-        uint256 createdAt;
     }
 
     struct Donation {
         address donor;
-        uint256 amount;
         address token;
-        uint256 disbursed;
+        uint256 amount;
+        uint256 disbursedAmount;
         bool withdrawn;
-        uint256 createdAt;
     }
 
-    mapping(address => bool) public donorWhitelist;
+    mapping(address => bool) public donorWhitelisted;
     mapping(uint256 => Donation) public donations;
     mapping(uint256 => Grant) public grants;
 
@@ -42,7 +40,7 @@ contract DisintermediatedGrants is Ownable {
     event DisburseGrant(Grant grant);
 
     modifier onlyWhitelistedDonor {
-        require(donorWhitelist[msg.sender], "donor not whitelisted");
+        require(donorWhitelisted[msg.sender], "caller is not whitelisted donor");
         _;
     }
 
@@ -57,7 +55,7 @@ contract DisintermediatedGrants is Ownable {
     }
 
     function whitelistDonor(address _donor) public onlyOwner {
-        donorWhitelist[_donor] = true;
+        donorWhitelisted[_donor] = true;
 
         emit WhitelistDonor(_donor);
     }
@@ -67,9 +65,8 @@ contract DisintermediatedGrants is Ownable {
             donor: msg.sender,
             token: _token,
             amount: _amount,
-            disbursed: 0,
-            withdrawn: false,
-            createdAt: block.number
+            disbursedAmount: 0,
+            withdrawn: false
         });
 
         donations[donationCount] = donation;
@@ -82,7 +79,9 @@ contract DisintermediatedGrants is Ownable {
     function withdrawDonation(uint256 _donationId) public {
         Donation storage donation = donations[_donationId];
         require(msg.sender == donation.donor, "caller is not donor");
-        IERC20Metadata(donation.token).transferFrom(address(this), donation.donor, donation.amount - donation.disbursed);
+        if (donation.amount > donation.disbursedAmount) {
+            IERC20Metadata(donation.token).transferFrom(address(this), donation.donor, donation.amount - donation.disbursedAmount);
+        }
 
         donation.withdrawn = true;
         emit WithdrawDonation(donation);
@@ -99,8 +98,7 @@ contract DisintermediatedGrants is Ownable {
             amount: _amount,
             endorsed: false,
             disbursed: false,
-            endorsedAt: 0,
-            createdAt: block.number
+            endorsedAt: 0
         });
 
         grants[grantCount] = grant;
@@ -123,11 +121,11 @@ contract DisintermediatedGrants is Ownable {
         require(donation.withdrawn, "donation has been withdrawn");
         require(grant.endorsed, "grant has not been endorsed");
         require(block.number >= grant.endorsedAt + donationGracePeriod, "donation grace period has not ended");
-        require(grant.amount <= donation.amount - donation.disbursed, "grant amount exceeds donation balance");
+        require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
 
         IERC20Metadata(donation.token).transferFrom(address(this), grant.recipient, grant.amount);
 
-        donation.disbursed += grant.amount;
+        donation.disbursedAmount += grant.amount;
         grant.disbursed = true;
         emit DisburseGrant(grant);
     }
