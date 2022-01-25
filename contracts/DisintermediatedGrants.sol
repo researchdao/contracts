@@ -13,6 +13,7 @@ contract DisintermediatedGrants is Ownable {
 
     struct Donation {
         address donor;
+        bool nativeToken;
         address token;
         uint256 amount;
         uint256 disbursedAmount;
@@ -62,6 +63,7 @@ contract DisintermediatedGrants is Ownable {
     function donate(address _token, uint256 _amount) public onlyWhitelistedDonor {
         Donation memory donation = Donation({
             donor: msg.sender,
+            nativeToken: false,
             token: _token,
             amount: _amount,
             disbursedAmount: 0,
@@ -75,6 +77,23 @@ contract DisintermediatedGrants is Ownable {
         IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
+    function donateNative() public payable onlyWhitelistedDonor {
+        Donation memory donation = Donation({
+            donor: msg.sender,
+            nativeToken: true,
+            token: address(0),
+            amount: msg.value,
+            disbursedAmount: 0,
+            withdrawn: false
+        });
+
+        donations[donationCount] = donation;
+        donationCount += 1;
+
+        emit Donate(donation);
+        payable(address(this)).transfer(msg.value);
+    }
+
     function withdrawDonation(uint256 _donationId) public {
         Donation storage donation = donations[_donationId];
         require(msg.sender == donation.donor, "caller is not donor");
@@ -83,7 +102,11 @@ contract DisintermediatedGrants is Ownable {
         donation.withdrawn = true;
 
         emit WithdrawDonation(donation);
-        IERC20Metadata(donation.token).transferFrom(address(this), donation.donor, donation.amount - donation.disbursedAmount);
+        if (donation.nativeToken) {
+            payable(donation.donor).transfer(donation.amount - donation.disbursedAmount);
+        } else {
+            IERC20Metadata(donation.token).transferFrom(address(this), donation.donor, donation.amount - donation.disbursedAmount);
+        }
     }
 
     function proposeGrant(
@@ -134,6 +157,10 @@ contract DisintermediatedGrants is Ownable {
         grant.disbursed = true;
 
         emit DisburseGrant(grant);
-        IERC20Metadata(donation.token).transferFrom(address(this), grant.recipient, grant.amount);
+        if (donation.nativeToken) {
+            payable(grant.recipient).transfer(grant.amount);
+        } else {
+            IERC20Metadata(donation.token).transferFrom(address(this), grant.recipient, grant.amount);
+        }
     }
 }
