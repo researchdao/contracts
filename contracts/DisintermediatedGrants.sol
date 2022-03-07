@@ -91,7 +91,6 @@ contract DisintermediatedGrants is Ownable {
         donationCount += 1;
 
         emit Donate(donation);
-        payable(address(this)).transfer(msg.value);
     }
 
     function withdrawDonation(uint256 _donationId) public {
