@@ -161,7 +161,7 @@ contract DisintermediatedGrants is Ownable {
             (bool disbursed, ) = payable(grant.recipient).call{value: grant.amount}("");
             require(disbursed, "failed to disburse grant");
         } else {
-            IERC20Metadata(donation.token).transferFrom(address(this), grant.recipient, grant.amount);
+            IERC20Metadata(donation.token).transfer(grant.recipient, grant.amount);
         }
     }
 }
