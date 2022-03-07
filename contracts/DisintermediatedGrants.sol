@@ -40,12 +40,12 @@ contract DisintermediatedGrants is Ownable {
     event EndorseGrant(Grant grant);
     event DisburseGrant(Grant grant);
 
-    modifier onlyWhitelistedDonor {
+    modifier onlyWhitelistedDonor() {
         require(donorWhitelisted[msg.sender], "caller is not whitelisted donor");
         _;
     }
 
-    modifier onlyMultisig {
+    modifier onlyMultisig() {
         require(msg.sender == multisig, "caller is not the multisig");
         _;
     }
