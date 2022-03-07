@@ -77,6 +77,8 @@ contract DisintermediatedGrants is Ownable {
         IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
+    receive() external payable {}
+
     function donateNative() public payable onlyWhitelistedDonor {
         Donation memory donation = Donation({
             donor: msg.sender,
