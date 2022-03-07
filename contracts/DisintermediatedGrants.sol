@@ -105,7 +105,7 @@ contract DisintermediatedGrants is Ownable {
             (bool withdrawn, ) = payable(donation.donor).call{value: donation.amount - donation.disbursedAmount}("");
             require(withdrawn, "failed to withdraw donation");
         } else {
-            IERC20Metadata(donation.token).transferFrom(address(this), donation.donor, donation.amount - donation.disbursedAmount);
+            IERC20Metadata(donation.token).transfer(donation.donor, donation.amount - donation.disbursedAmount);
         }
     }
 
