@@ -1,15 +1,10 @@
-# Basic Sample Hardhat Project
+# ResearchDAO Contracts
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts.
+## Contents
 
-Try running some of the following tasks:
+- `DisintermediatedGrants.sol`: A contract to receive and handle ResearchDAO grants and donations. When the time comes for the governors to disperse the donated funds, they will do so by providing a grant proposal to the contract. The original donor then has the option to veto the grant and withdraw their funds. If they choose not to do so, the grant is automatically approved after a grace period has passed. This legally absolves the ResearchDAO of custodial responsibility, as the funds can be considered transferred from the donor to the beneficiary, directly. Any reporting responsibilities lie with the donor and the recipient.
 
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-node scripts/sample-script.js
-npx hardhat help
-```
+## Installation & Testing
+
+- Install dependencies: `npm i` 
+- Run tests: `npm test`
