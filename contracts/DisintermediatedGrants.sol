@@ -158,7 +158,8 @@ contract DisintermediatedGrants is Ownable {
 
         emit DisburseGrant(grant);
         if (donation.nativeToken) {
-            payable(grant.recipient).transfer(grant.amount);
+            (bool disbursed, ) = payable(grant.recipient).call{value: grant.amount}("");
+            require(disbursed, "failed to disburse grant");
         } else {
             IERC20Metadata(donation.token).transferFrom(address(this), grant.recipient, grant.amount);
         }
