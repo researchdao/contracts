@@ -148,7 +148,7 @@ contract DisintermediatedGrants is Ownable {
     function disburseGrant(uint256 _grantId) public {
         Grant storage grant = grants[_grantId];
         Donation storage donation = donations[grant.donationId];
-        require(donation.withdrawn, "donation has been withdrawn");
+        require(!donation.withdrawn, "donation has been withdrawn");
         require(grant.endorsed, "grant has not been endorsed");
         require(block.number >= grant.endorsedAt + donationGracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
