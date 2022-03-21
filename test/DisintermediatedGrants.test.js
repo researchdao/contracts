@@ -333,6 +333,13 @@ describe("DisintermediatedGrants", function () {
         })
     })
     describe("grant disbursal", function () {
+        it("fails if grant has already been disbursed", async function () {
+            const grantId = await setGrant(this.grants, {
+                ...this.defaultERC20Grant,
+                disbursed: true,
+            })
+            await expect(this.grants.disburseGrant(grantId)).to.be.revertedWith("grant has already been disbursed")
+        })
         it("fails if grant does not exist", async function () {
             await expect(this.grants.disburseGrant(404)).to.be.revertedWith("grant has not been endorsed")
         })
