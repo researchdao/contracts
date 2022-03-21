@@ -131,20 +131,14 @@ describe("DisintermediatedGrants", function () {
     })
     describe("native donations", function () {
         it("cannot be made by non-whitelisted donors", async function () {
-            await expect(
-                this.grants.connect(this.eve).donateNative(ETH_AMOUNT, { value: ETH_AMOUNT })
-            ).to.be.revertedWith("caller is not whitelisted donor")
-        })
-        it("fails if specified amount does not much sent amount", async function () {
-            await whitelistDonor(this.grants, this.alice.address)
-            await expect(
-                this.grants.connect(this.alice).donateNative(ETH_AMOUNT.mul(2), { value: ETH_AMOUNT })
-            ).to.be.revertedWith("Specified amount does not match sent amount")
+            await expect(this.grants.connect(this.eve).donateNative({ value: ETH_AMOUNT })).to.be.revertedWith(
+                "caller is not whitelisted donor"
+            )
         })
         it("can be made by whitelisted donors", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            const tx = await this.grants.connect(this.alice).donateNative(ETH_AMOUNT, { value: ETH_AMOUNT })
+            const tx = await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
             const donation = await this.grants.donations(donationCount)
             expect(donation.donor).to.equal(this.alice.address)
             expect(donation.nativeToken).to.equal(true)
