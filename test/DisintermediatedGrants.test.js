@@ -154,6 +154,24 @@ describe("DisintermediatedGrants", function () {
         before(async function () {
             await whitelistDonor(this.grants, this.alice.address)
         })
+        it("fails for ERC20 donations if already withdrawn", async function () {
+            const donationId = await setDonation(this.grants, {
+                ...this.defaultERC20Donation,
+                withdrawn: true,
+            })
+            await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
+                "donation has already been withdrawn"
+            )
+        })
+        it("fails for native donations if already withdrawn", async function () {
+            const donationId = await setDonation(this.grants, {
+                ...this.defaultNativeDonation,
+                withdrawn: true,
+            })
+            await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
+                "donation has already been withdrawn"
+            )
+        })
         it("fails for ERC20 donations if caller is not the donor", async function () {
             const donationId = await setDonation(this.grants, {
                 ...this.defaultERC20Donation,

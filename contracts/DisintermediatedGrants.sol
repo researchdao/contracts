@@ -98,6 +98,7 @@ contract DisintermediatedGrants is Ownable {
     function withdrawDonation(uint256 _donationId) public {
         Donation storage donation = donations[_donationId];
         require(msg.sender == donation.donor, "caller is not donor");
+        require(!donation.withdrawn, "donation has already been withdrawn");
         require(donation.amount > donation.disbursedAmount, "donation has been fully disbursed");
 
         donation.withdrawn = true;
