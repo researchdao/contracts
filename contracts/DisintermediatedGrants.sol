@@ -5,8 +5,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract DisintermediatedGrants is Ownable {
-    address public multisig;
-    uint256 public donationGracePeriod;
+    address public immutable multisig;
+    uint256 public immutable donationGracePeriod;
 
     uint256 public donationCount = 0;
     uint256 public grantCount = 0;
