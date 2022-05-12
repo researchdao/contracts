@@ -156,6 +156,13 @@ describe("DisintermediatedGrants", function () {
             await expect(tx).to.emit(this.grants, "Donate").withArgs(donation)
             expect(await ethers.provider.getBalance(this.grants.address)).to.equal(ETH_AMOUNT)
         })
+        it("fail if donation amount is zero", async function () {
+            await whitelistDonor(this.grants, this.alice.address)
+            const donationCount = await this.grants.donationCount()
+            await expect(this.grants.connect(this.alice).donateNative({ value: 0 })).to.be.revertedWith(
+                "donation amount cannot be zero"
+            )
+        })
     })
     describe("donation withdrawal", function () {
         before(async function () {

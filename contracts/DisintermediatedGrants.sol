@@ -81,6 +81,7 @@ contract DisintermediatedGrants is Ownable {
     receive() external payable {}
 
     function donateNative() public payable onlyWhitelistedDonor {
+        require(msg.value > 0, "donation amount cannot be zero");
         Donation memory donation = Donation({
             donor: msg.sender,
             nativeToken: true,
