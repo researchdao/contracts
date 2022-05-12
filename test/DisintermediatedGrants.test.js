@@ -128,6 +128,13 @@ describe("DisintermediatedGrants", function () {
             await expect(tx).to.emit(this.grants, "Donate").withArgs(donation)
             expect(await this.testERC20.balanceOf(this.grants.address)).to.equal(ERC20_TOKEN_AMOUNT)
         })
+        it("fail if donation amount is zero", async function () {
+            await whitelistDonor(this.grants, this.alice.address)
+            const donationCount = await this.grants.donationCount()
+            await expect(
+                this.grants.connect(this.alice).donate(this.testERC20.address, 0)
+            ).to.be.revertedWith("donation amount cannot be zero")
+        })
     })
     describe("native donations", function () {
         it("cannot be made by non-whitelisted donors", async function () {

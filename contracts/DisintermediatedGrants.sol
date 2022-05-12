@@ -61,6 +61,7 @@ contract DisintermediatedGrants is Ownable {
     }
 
     function donate(address _token, uint256 _amount) public onlyWhitelistedDonor {
+        require(_amount > 0, "donation amount cannot be zero");
         Donation memory donation = Donation({
             donor: msg.sender,
             nativeToken: false,
