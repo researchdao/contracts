@@ -119,7 +119,7 @@ contract DisintermediatedGrants is Ownable {
         address _recipient,
         uint256 _amount
     ) public onlyOwner {
-        Donation storage donation = donations[_donationId];
+        Donation memory donation = donations[_donationId];
         require(donation.amount - donation.disbursedAmount >= _amount, "donation cannot cover full grant amount");
 
         Grant memory grant = Grant({
