@@ -508,4 +508,14 @@ describe("DisintermediatedGrants", function () {
             expect(await ethers.provider.getBalance(this.bob.address)).to.equal(grantRecipientBalance.add(grant.amount))
         })
     })
+    describe("native transfers", function () {
+        it("revert", async function () {
+            await expect(
+                this.alice.sendTransaction({
+                    to: this.grants.address,
+                    value: ETH_AMOUNT,
+                })
+            ).to.be.reverted
+        })
+    })
 })
