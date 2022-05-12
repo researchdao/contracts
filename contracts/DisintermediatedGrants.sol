@@ -78,7 +78,9 @@ contract DisintermediatedGrants is Ownable {
         IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
-    receive() external payable {}
+    receive() external payable {
+        revert();
+    }
 
     function donateNative() public payable onlyWhitelistedDonor {
         require(msg.value > 0, "donation amount cannot be zero");
@@ -107,8 +109,7 @@ contract DisintermediatedGrants is Ownable {
 
         emit WithdrawDonation(donation);
         if (donation.nativeToken) {
-            (bool withdrawn, ) = payable(donation.donor).call{value: donation.amount - donation.disbursedAmount}("");
-            require(withdrawn, "failed to withdraw donation");
+            payable(donation.donor).transfer(donation.amount - donation.disbursedAmount);
         } else {
             IERC20Metadata(donation.token).transfer(donation.donor, donation.amount - donation.disbursedAmount);
         }
@@ -164,8 +165,7 @@ contract DisintermediatedGrants is Ownable {
 
         emit DisburseGrant(grant);
         if (donation.nativeToken) {
-            (bool disbursed, ) = payable(grant.recipient).call{value: grant.amount}("");
-            require(disbursed, "failed to disburse grant");
+            payable(grant.recipient).transfer(grant.amount);
         } else {
             IERC20Metadata(donation.token).transfer(grant.recipient, grant.amount);
         }
