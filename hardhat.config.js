@@ -1,5 +1,8 @@
 require("@nomiclabs/hardhat-waffle");
 require("solidity-coverage");
+require('dotenv').config();
+
+const HARMONY_PRIVATE_KEY = process.env.HARMONY_PRIVATE_KEY;
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -32,5 +35,15 @@ module.exports = {
                 }
             }
         }
+    },
+    networks: {
+        testnet: {
+            url: `https://api.s0.b.hmny.io`,
+            accounts: [`0x${HARMONY_PRIVATE_KEY}`],
+        },
+        mainnet: {
+            url: `https://api.harmony.one`,
+            accounts: [`0x${HARMONY_PRIVATE_KEY}`],
+        },
     },
 };
