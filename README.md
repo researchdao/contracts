@@ -8,3 +8,4 @@
 
 - Install dependencies: `npm i` 
 - Run tests: `npm test`
+- Deploy: `npx hardhat run scripts/deploy.js --network {NETWORK}`
