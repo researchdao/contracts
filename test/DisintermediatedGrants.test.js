@@ -102,17 +102,19 @@ describe("DisintermediatedGrants", function () {
         it("fail if donation amount exceeds donor balance", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donorBalance = await this.testERC20.balanceOf(this.alice.address)
+            const donationAmount = donorBalance.add(1)
+            await this.testERC20.connect(this.alice).approve(this.grants.address, donationAmount)
             await expect(
-                this.grants.connect(this.alice).donate(this.testERC20.address, donorBalance.add(1))
+                this.grants.connect(this.alice).donate(this.testERC20.address, donationAmount)
             ).to.be.revertedWith("ERC20: transfer amount exceeds balance")
         })
         it("fail if donation amount exceeds donor allowance", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donorBalance = await this.testERC20.balanceOf(this.alice.address)
-            await this.testERC20.connect(this.alice).mint(1)
+            await this.testERC20.connect(this.alice).approve(this.grants.address, 0)
             await expect(
-                this.grants.connect(this.alice).donate(this.testERC20.address, donorBalance.add(1))
-            ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
+                this.grants.connect(this.alice).donate(this.testERC20.address, donorBalance)
+            ).to.be.revertedWith("ERC20: insufficient allowance")
         })
         it("can be made by whitelisted donors", async function () {
             await whitelistDonor(this.grants, this.alice.address)
