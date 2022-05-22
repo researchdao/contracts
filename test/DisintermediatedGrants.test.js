@@ -114,7 +114,7 @@ describe("DisintermediatedGrants", function () {
             await this.testERC20.connect(this.alice).approve(this.grants.address, 0)
             await expect(
                 this.grants.connect(this.alice).donate(this.testERC20.address, donorBalance)
-            ).to.be.revertedWith("ERC20: insufficient allowance")
+            ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
         })
         it("can be made by whitelisted donors", async function () {
             await whitelistDonor(this.grants, this.alice.address)
