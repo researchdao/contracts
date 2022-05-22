@@ -1,4 +1,4 @@
-require('dotenv').config()
+require("dotenv").config()
 
 async function main() {
     const [deployer] = await ethers.getSigners()
@@ -7,7 +7,10 @@ async function main() {
     console.log("Account balance:", (await deployer.getBalance()).toString())
 
     const DisintermediatedGrants = await ethers.getContractFactory("DisintermediatedGrants")
-    const disintermediatedGrants = await DisintermediatedGrants.deploy(process.env.MULTISIG_ADDRESS, process.env.GRACE_PERIOD)
+    const disintermediatedGrants = await DisintermediatedGrants.deploy(
+        process.env.MULTISIG_ADDRESS,
+        process.env.GRACE_PERIOD
+    )
 
     console.log("DisintermediatedGrants address:", disintermediatedGrants.address)
 }

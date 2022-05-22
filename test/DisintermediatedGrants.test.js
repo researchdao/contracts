@@ -13,7 +13,7 @@ const whitelistDonor = (contract, donor) => {
 }
 
 const setDonation = async (contract, donation, id) => {
-    const donationId = id || await contract.donationCount()
+    const donationId = id || (await contract.donationCount())
     await contract.setVariable("donations", {
         [donationId]: donation,
     })
@@ -133,9 +133,9 @@ describe("DisintermediatedGrants", function () {
         it("fail if donation amount is zero", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            await expect(
-                this.grants.connect(this.alice).donate(this.testERC20.address, 0)
-            ).to.be.revertedWith("donation amount cannot be zero")
+            await expect(this.grants.connect(this.alice).donate(this.testERC20.address, 0)).to.be.revertedWith(
+                "donation amount cannot be zero"
+            )
         })
     })
     describe("native donations", function () {
@@ -266,11 +266,15 @@ describe("DisintermediatedGrants", function () {
             await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
             const withdrawalAmount = ETH_AMOUNT.div(2)
             const donorBalance = await ethers.provider.getBalance(this.alice.address)
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                amount: ETH_AMOUNT,
-                disbursedAmount: ETH_AMOUNT.sub(withdrawalAmount),
-            }, donationCount)
+            const donationId = await setDonation(
+                this.grants,
+                {
+                    ...this.defaultNativeDonation,
+                    amount: ETH_AMOUNT,
+                    disbursedAmount: ETH_AMOUNT.sub(withdrawalAmount),
+                },
+                donationCount
+            )
             const tx = await this.grants.connect(this.alice).withdrawDonation(donationId)
             const receipt = await tx.wait()
             const donation = await this.grants.donations(donationId)
@@ -488,11 +492,15 @@ describe("DisintermediatedGrants", function () {
             const donationCount = await this.grants.donationCount()
             await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
             const grantRecipientBalance = await ethers.provider.getBalance(this.bob.address)
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                amount: ETH_AMOUNT,
-                disbursedAmount: 0,
-            }, donationCount)
+            const donationId = await setDonation(
+                this.grants,
+                {
+                    ...this.defaultNativeDonation,
+                    amount: ETH_AMOUNT,
+                    disbursedAmount: 0,
+                },
+                donationCount
+            )
             const grantId = await setGrant(this.grants, {
                 ...this.defaultNativeGrant,
                 donationId,
