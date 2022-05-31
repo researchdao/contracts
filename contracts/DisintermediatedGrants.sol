@@ -2,7 +2,7 @@
 pragma solidity ^0.8.4;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract DisintermediatedGrants is Ownable {
     address public immutable multisig;
@@ -13,7 +13,6 @@ contract DisintermediatedGrants is Ownable {
 
     struct Donation {
         address donor;
-        bool nativeToken;
         address token;
         uint256 amount;
         uint256 disbursedAmount;
@@ -62,9 +61,13 @@ contract DisintermediatedGrants is Ownable {
 
     function donate(address _token, uint256 _amount) public onlyWhitelistedDonor {
         require(_amount > 0, "donation amount cannot be zero");
+        require(ERC20(_token).balanceOf(msg.sender) >= _amount, "donation amount exceeds balance");
+        require(
+            ERC20(_token).allowance(msg.sender, address(this)) >= _amount,
+            "insufficient donation amount allowance"
+        );
         Donation memory donation = Donation({
             donor: msg.sender,
-            nativeToken: false,
             token: _token,
             amount: _amount,
             disbursedAmount: 0,
@@ -75,28 +78,10 @@ contract DisintermediatedGrants is Ownable {
         donationCount += 1;
 
         emit Donate(donation);
-        IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
     receive() external payable {
         revert();
-    }
-
-    function donateNative() public payable onlyWhitelistedDonor {
-        require(msg.value > 0, "donation amount cannot be zero");
-        Donation memory donation = Donation({
-            donor: msg.sender,
-            nativeToken: true,
-            token: address(0),
-            amount: msg.value,
-            disbursedAmount: 0,
-            withdrawn: false
-        });
-
-        donations[donationCount] = donation;
-        donationCount += 1;
-
-        emit Donate(donation);
     }
 
     function withdrawDonation(uint256 _donationId) public {
@@ -108,11 +93,6 @@ contract DisintermediatedGrants is Ownable {
         donation.withdrawn = true;
 
         emit WithdrawDonation(donation);
-        if (donation.nativeToken) {
-            payable(donation.donor).transfer(donation.amount - donation.disbursedAmount);
-        } else {
-            IERC20Metadata(donation.token).transfer(donation.donor, donation.amount - donation.disbursedAmount);
-        }
     }
 
     function proposeGrant(
@@ -159,15 +139,15 @@ contract DisintermediatedGrants is Ownable {
         require(grant.endorsed, "grant has not been endorsed");
         require(block.number >= grant.endorsedAt + donationGracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
+        require(
+            ERC20(donation.token).allowance(donation.donor, address(this)) >= donation.amount,
+            "donor has removed allowance"
+        );
 
         donation.disbursedAmount += grant.amount;
         grant.disbursed = true;
 
         emit DisburseGrant(grant);
-        if (donation.nativeToken) {
-            payable(grant.recipient).transfer(grant.amount);
-        } else {
-            IERC20Metadata(donation.token).transfer(grant.recipient, grant.amount);
-        }
+        ERC20(donation.token).transferFrom(donation.donor, grant.recipient, grant.amount);
     }
 }
