@@ -377,4 +377,14 @@ describe("DisintermediatedGrants", function () {
             expect(await this.token.balanceOf(this.bob.address)).to.equal(grantRecipientBalance.add(grant.amount))
         })
     })
+    describe("native transfers", function () {
+        it("not permitted", async function () {
+            await expect(
+                this.alice.sendTransaction({
+                    to: this.grants.address,
+                    value: ethers.BigNumber.from(100),
+                })
+            ).to.be.reverted
+        })
+    })
 })
