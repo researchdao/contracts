@@ -2,9 +2,9 @@ const { expect } = require("chai")
 const { ethers } = require("hardhat")
 const { smock } = require("@defi-wonderland/smock")
 
-const DONATION_GRACE_PERIOD = 10
 const ERC20_TOKEN_AMOUNT = ethers.BigNumber.from(100)
 const ETH_AMOUNT = ethers.BigNumber.from(100)
+const TEST_GRACE_PERIOD = 10
 
 const whitelistDonor = (contract, donor) => {
     return contract.setVariable("donorWhitelisted", {
@@ -41,10 +41,7 @@ describe("DisintermediatedGrants", function () {
         this.TestERC20 = await ethers.getContractFactory("TestERC20")
     })
     beforeEach(async function () {
-        this.grants = await this.DisintermediatedGrants.connect(this.owner).deploy(
-            this.multisig.address,
-            DONATION_GRACE_PERIOD
-        )
+        this.grants = await this.DisintermediatedGrants.connect(this.owner).deploy(this.multisig.address)
         await this.grants.deployed()
         this.testERC20 = await this.TestERC20.deploy()
         await this.testERC20.deployed()
@@ -58,6 +55,7 @@ describe("DisintermediatedGrants", function () {
             token: this.testERC20.address,
             amount: ERC20_TOKEN_AMOUNT,
             disbursedAmount: 0,
+            gracePeriod: 10,
             withdrawn: false,
         }
         this.defaultNativeDonation = {
@@ -96,7 +94,7 @@ describe("DisintermediatedGrants", function () {
     describe("ERC20 donations", function () {
         it("cannot be made by non-whitelisted donors", async function () {
             await expect(
-                this.grants.connect(this.eve).donate(this.testERC20.address, ERC20_TOKEN_AMOUNT)
+                this.grants.connect(this.eve).donate(this.testERC20.address, ERC20_TOKEN_AMOUNT, TEST_GRACE_PERIOD)
             ).to.be.revertedWith("caller is not whitelisted donor")
         })
         it("fail if donation amount exceeds donor balance", async function () {
@@ -105,7 +103,7 @@ describe("DisintermediatedGrants", function () {
             const donationAmount = donorBalance.add(1)
             await this.testERC20.connect(this.alice).approve(this.grants.address, donationAmount)
             await expect(
-                this.grants.connect(this.alice).donate(this.testERC20.address, donationAmount)
+                this.grants.connect(this.alice).donate(this.testERC20.address, donationAmount, TEST_GRACE_PERIOD)
             ).to.be.revertedWith("ERC20: transfer amount exceeds balance")
         })
         it("fail if donation amount exceeds donor allowance", async function () {
@@ -113,19 +111,22 @@ describe("DisintermediatedGrants", function () {
             const donorBalance = await this.testERC20.balanceOf(this.alice.address)
             await this.testERC20.connect(this.alice).approve(this.grants.address, 0)
             await expect(
-                this.grants.connect(this.alice).donate(this.testERC20.address, donorBalance)
+                this.grants.connect(this.alice).donate(this.testERC20.address, donorBalance, TEST_GRACE_PERIOD)
             ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
         })
         it("can be made by whitelisted donors", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            const tx = await this.grants.connect(this.alice).donate(this.testERC20.address, ERC20_TOKEN_AMOUNT)
+            const tx = await this.grants
+                .connect(this.alice)
+                .donate(this.testERC20.address, ERC20_TOKEN_AMOUNT, TEST_GRACE_PERIOD)
             const donation = await this.grants.donations(donationCount)
             expect(donation.donor).to.equal(this.alice.address)
             expect(donation.nativeToken).to.equal(false)
             expect(donation.token).to.equal(this.testERC20.address)
             expect(donation.amount).to.equal(ERC20_TOKEN_AMOUNT)
             expect(donation.disbursedAmount).to.equal(0)
+            expect(donation.gracePeriod).to.equal(TEST_GRACE_PERIOD)
             expect(donation.withdrawn).to.equal(false)
             await expect(tx).to.emit(this.grants, "Donate").withArgs(donation)
             expect(await this.testERC20.balanceOf(this.grants.address)).to.equal(ERC20_TOKEN_AMOUNT)
@@ -133,27 +134,41 @@ describe("DisintermediatedGrants", function () {
         it("fail if donation amount is zero", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            await expect(this.grants.connect(this.alice).donate(this.testERC20.address, 0)).to.be.revertedWith(
-                "donation amount cannot be zero"
-            )
+            await expect(
+                this.grants.connect(this.alice).donate(this.testERC20.address, 0, TEST_GRACE_PERIOD)
+            ).to.be.revertedWith("donation amount cannot be zero")
+        })
+        it("fail if grace period is too long", async function () {
+            await whitelistDonor(this.grants, this.alice.address)
+            const donationCount = await this.grants.donationCount()
+            await expect(
+                this.grants
+                    .connect(this.alice)
+                    .donate(
+                        this.testERC20.address,
+                        ERC20_TOKEN_AMOUNT,
+                        (await this.grants.MAX_DONATION_GRACE_PERIOD()) + 1
+                    )
+            ).to.be.revertedWith("withdrawal grace period is too long")
         })
     })
     describe("native donations", function () {
         it("cannot be made by non-whitelisted donors", async function () {
-            await expect(this.grants.connect(this.eve).donateNative({ value: ETH_AMOUNT })).to.be.revertedWith(
-                "caller is not whitelisted donor"
-            )
+            await expect(
+                this.grants.connect(this.eve).donateNative(TEST_GRACE_PERIOD, { value: ETH_AMOUNT })
+            ).to.be.revertedWith("caller is not whitelisted donor")
         })
         it("can be made by whitelisted donors", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            const tx = await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
+            const tx = await this.grants.connect(this.alice).donateNative(TEST_GRACE_PERIOD, { value: ETH_AMOUNT })
             const donation = await this.grants.donations(donationCount)
             expect(donation.donor).to.equal(this.alice.address)
             expect(donation.nativeToken).to.equal(true)
             expect(donation.token).to.equal(ethers.constants.AddressZero)
             expect(donation.amount).to.equal(ETH_AMOUNT)
             expect(donation.disbursedAmount).to.equal(0)
+            expect(donation.gracePeriod).to.equal(TEST_GRACE_PERIOD)
             expect(donation.withdrawn).to.equal(false)
             await expect(tx).to.emit(this.grants, "Donate").withArgs(donation)
             expect(await ethers.provider.getBalance(this.grants.address)).to.equal(ETH_AMOUNT)
@@ -161,9 +176,18 @@ describe("DisintermediatedGrants", function () {
         it("fail if donation amount is zero", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            await expect(this.grants.connect(this.alice).donateNative({ value: 0 })).to.be.revertedWith(
-                "donation amount cannot be zero"
-            )
+            await expect(
+                this.grants.connect(this.alice).donateNative(TEST_GRACE_PERIOD, { value: 0 })
+            ).to.be.revertedWith("donation amount cannot be zero")
+        })
+        it("fail if grace period is too long", async function () {
+            await whitelistDonor(this.grants, this.alice.address)
+            const donationCount = await this.grants.donationCount()
+            await expect(
+                this.grants
+                    .connect(this.alice)
+                    .donateNative((await this.grants.MAX_DONATION_GRACE_PERIOD()) + 1, { value: ETH_AMOUNT })
+            ).to.be.revertedWith("withdrawal grace period is too long")
         })
     })
     describe("donation withdrawal", function () {
@@ -263,7 +287,7 @@ describe("DisintermediatedGrants", function () {
         it("withdraws native funds to donor", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
+            await this.grants.connect(this.alice).donateNative(TEST_GRACE_PERIOD, { value: ETH_AMOUNT })
             const withdrawalAmount = ETH_AMOUNT.div(2)
             const donorBalance = await ethers.provider.getBalance(this.alice.address)
             const donationId = await setDonation(
@@ -444,7 +468,7 @@ describe("DisintermediatedGrants", function () {
                 donationId,
                 amount: contractBalance.add(1),
                 endorsed: true,
-                endorsedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
+                endorsedAt: (await ethers.provider.getBlockNumber()) - this.defaultNativeDonation.gracePeriod,
             })
             await expect(this.grants.disburseGrant(grantId)).to.be.reverted
         })
@@ -459,7 +483,7 @@ describe("DisintermediatedGrants", function () {
                 donationId,
                 amount: contractBalance.add(1),
                 endorsed: true,
-                endorsedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
+                endorsedAt: (await ethers.provider.getBlockNumber()) - this.defaultERC20Donation.gracePeriod,
             })
             await expect(this.grants.disburseGrant(grantId)).to.be.revertedWith(
                 "ERC20: transfer amount exceeds balance"
@@ -473,7 +497,7 @@ describe("DisintermediatedGrants", function () {
                 ...this.defaultERC20Grant,
                 donationId,
                 endorsed: true,
-                endorsedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
+                endorsedAt: (await ethers.provider.getBlockNumber()) - this.defaultERC20Donation.gracePeriod,
             })
             const tx = await this.grants.disburseGrant(grantId)
             const receipt = await tx.wait()
@@ -490,7 +514,7 @@ describe("DisintermediatedGrants", function () {
         it("transfers native grant amount to recipient", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
+            await this.grants.connect(this.alice).donateNative(TEST_GRACE_PERIOD, { value: ETH_AMOUNT })
             const grantRecipientBalance = await ethers.provider.getBalance(this.bob.address)
             const donationId = await setDonation(
                 this.grants,
@@ -506,7 +530,7 @@ describe("DisintermediatedGrants", function () {
                 donationId,
                 amount: ETH_AMOUNT.div(2),
                 endorsed: true,
-                endorsedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
+                endorsedAt: (await ethers.provider.getBlockNumber()) - this.defaultNativeDonation.gracePeriod,
             })
             const tx = await this.grants.disburseGrant(grantId)
             const receipt = await tx.wait()

@@ -6,10 +6,11 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 contract DisintermediatedGrants is Ownable {
     address public immutable multisig;
-    uint256 public immutable donationGracePeriod;
 
     uint256 public donationCount = 0;
     uint256 public grantCount = 0;
+
+    uint32 public constant MAX_DONATION_GRACE_PERIOD = 600_000;
 
     struct Donation {
         address donor;
@@ -17,6 +18,7 @@ contract DisintermediatedGrants is Ownable {
         address token;
         uint256 amount;
         uint256 disbursedAmount;
+        uint32 gracePeriod;
         bool withdrawn;
     }
 
@@ -50,9 +52,8 @@ contract DisintermediatedGrants is Ownable {
         _;
     }
 
-    constructor(address _multisig, uint256 _donationGracePeriod) {
+    constructor(address _multisig) {
         multisig = _multisig;
-        donationGracePeriod = _donationGracePeriod;
     }
 
     function whitelistDonor(address _donor) public onlyOwner {
@@ -60,14 +61,20 @@ contract DisintermediatedGrants is Ownable {
         emit WhitelistDonor(_donor);
     }
 
-    function donate(address _token, uint256 _amount) public onlyWhitelistedDonor {
+    function donate(
+        address _token,
+        uint256 _amount,
+        uint32 _gracePeriod
+    ) public onlyWhitelistedDonor {
         require(_amount > 0, "donation amount cannot be zero");
+        require(_gracePeriod <= MAX_DONATION_GRACE_PERIOD, "withdrawal grace period is too long");
         Donation memory donation = Donation({
             donor: msg.sender,
             nativeToken: false,
             token: _token,
             amount: _amount,
             disbursedAmount: 0,
+            gracePeriod: _gracePeriod,
             withdrawn: false
         });
 
@@ -82,14 +89,16 @@ contract DisintermediatedGrants is Ownable {
         revert();
     }
 
-    function donateNative() public payable onlyWhitelistedDonor {
+    function donateNative(uint32 _gracePeriod) public payable onlyWhitelistedDonor {
         require(msg.value > 0, "donation amount cannot be zero");
+        require(_gracePeriod <= MAX_DONATION_GRACE_PERIOD, "withdrawal grace period is too long");
         Donation memory donation = Donation({
             donor: msg.sender,
             nativeToken: true,
             token: address(0),
             amount: msg.value,
             disbursedAmount: 0,
+            gracePeriod: _gracePeriod,
             withdrawn: false
         });
 
@@ -157,7 +166,7 @@ contract DisintermediatedGrants is Ownable {
         Donation storage donation = donations[grant.donationId];
         require(!donation.withdrawn, "donation has been withdrawn");
         require(grant.endorsed, "grant has not been endorsed");
-        require(block.number >= grant.endorsedAt + donationGracePeriod, "donation grace period has not ended");
+        require(block.number >= grant.endorsedAt + donation.gracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
 
         donation.disbursedAmount += grant.amount;
