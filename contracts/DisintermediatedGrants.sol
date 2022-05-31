@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-contract DisintermediatedGrants is Ownable {
+contract DisintermediatedGrants {
     address public immutable multisig;
     uint256 public immutable donationGracePeriod;
 
@@ -24,9 +23,14 @@ contract DisintermediatedGrants is Ownable {
         uint256 donationId;
         address recipient;
         uint256 amount;
-        bool endorsed;
         bool disbursed;
-        uint256 endorsedAt;
+        uint256 proposedAt;
+    }
+
+    struct GrantProposal {
+        uint256 donationId;
+        address recipient;
+        uint256 amount;
     }
 
     mapping(address => bool) public donorWhitelisted;
@@ -37,7 +41,6 @@ contract DisintermediatedGrants is Ownable {
     event Donate(Donation donation);
     event WithdrawDonation(Donation donation);
     event ProposeGrant(Grant grant);
-    event EndorseGrant(Grant grant);
     event DisburseGrant(Grant grant);
 
     modifier onlyWhitelistedDonor() {
@@ -55,7 +58,7 @@ contract DisintermediatedGrants is Ownable {
         donationGracePeriod = _donationGracePeriod;
     }
 
-    function whitelistDonor(address _donor) public onlyOwner {
+    function whitelistDonor(address _donor) public onlyMultisig {
         donorWhitelisted[_donor] = true;
         emit WhitelistDonor(_donor);
     }
@@ -115,21 +118,19 @@ contract DisintermediatedGrants is Ownable {
         }
     }
 
-    function proposeGrant(
-        uint256 _donationId,
-        address _recipient,
-        uint256 _amount
-    ) public onlyOwner {
-        Donation memory donation = donations[_donationId];
-        require(donation.amount - donation.disbursedAmount >= _amount, "donation cannot cover full grant amount");
+    function proposeGrant(GrantProposal memory _grantProposal) public onlyMultisig {
+        Donation memory donation = donations[_grantProposal.donationId];
+        require(
+            donation.amount - donation.disbursedAmount >= _grantProposal.amount,
+            "donation cannot cover full grant amount"
+        );
 
         Grant memory grant = Grant({
-            donationId: _donationId,
-            recipient: _recipient,
-            amount: _amount,
-            endorsed: false,
+            donationId: _grantProposal.donationId,
+            recipient: _grantProposal.recipient,
+            amount: _grantProposal.amount,
             disbursed: false,
-            endorsedAt: 0
+            proposedAt: block.number
         });
 
         grants[grantCount] = grant;
@@ -138,26 +139,19 @@ contract DisintermediatedGrants is Ownable {
         emit ProposeGrant(grant);
     }
 
-    function endorseGrant(uint256 _grantId) public onlyMultisig {
-        Grant storage grant = grants[_grantId];
-        grant.endorsed = true;
-        grant.endorsedAt = block.number;
-        emit EndorseGrant(grant);
-    }
-
-    function endorseGrants(uint256[] memory _grantIds) public {
-        for (uint16 i = 0; i < _grantIds.length; ++i) {
-            endorseGrant(_grantIds[i]);
+    function proposeGrants(GrantProposal[] memory _grantProposals) public {
+        for (uint16 i = 0; i < _grantProposals.length; ++i) {
+            proposeGrant(_grantProposals[i]);
         }
     }
 
     function disburseGrant(uint256 _grantId) public {
+        require(_grantId < grantCount, "grant does not exist");
         Grant storage grant = grants[_grantId];
         require(!grant.disbursed, "grant has already been disbursed");
         Donation storage donation = donations[grant.donationId];
         require(!donation.withdrawn, "donation has been withdrawn");
-        require(grant.endorsed, "grant has not been endorsed");
-        require(block.number >= grant.endorsedAt + donationGracePeriod, "donation grace period has not ended");
+        require(block.number >= grant.proposedAt + donationGracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
 
         donation.disbursedAmount += grant.amount;
