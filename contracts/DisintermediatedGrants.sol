@@ -5,16 +5,18 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract DisintermediatedGrants {
     address public immutable multisig;
-    uint256 public immutable donationGracePeriod;
 
     uint256 public donationCount = 0;
     uint256 public grantCount = 0;
+
+    uint32 public constant MAX_DONATION_GRACE_PERIOD = 600_000;
 
     struct Donation {
         address donor;
         address token;
         uint256 amount;
         uint256 disbursedAmount;
+        uint32 gracePeriod;
         bool withdrawn;
     }
 
@@ -52,9 +54,8 @@ contract DisintermediatedGrants {
         _;
     }
 
-    constructor(address _multisig, uint256 _donationGracePeriod) {
+    constructor(address _multisig) {
         multisig = _multisig;
-        donationGracePeriod = _donationGracePeriod;
     }
 
     function whitelistDonor(address _donor) public onlyMultisig {
@@ -62,18 +63,25 @@ contract DisintermediatedGrants {
         emit WhitelistDonor(_donor);
     }
 
-    function donate(address _token, uint256 _amount) public onlyWhitelistedDonor {
+    function donate(
+        address _token,
+        uint256 _amount,
+        uint32 _gracePeriod
+    ) public onlyWhitelistedDonor {
         require(_amount > 0, "donation amount cannot be zero");
+        require(_gracePeriod <= MAX_DONATION_GRACE_PERIOD, "withdrawal grace period is too long");
         require(ERC20(_token).balanceOf(msg.sender) >= _amount, "donation amount exceeds balance");
         require(
             ERC20(_token).allowance(msg.sender, address(this)) >= _amount,
             "insufficient donation amount allowance"
         );
+
         Donation memory donation = Donation({
             donor: msg.sender,
             token: _token,
             amount: _amount,
             disbursedAmount: 0,
+            gracePeriod: _gracePeriod,
             withdrawn: false
         });
 
@@ -131,7 +139,7 @@ contract DisintermediatedGrants {
         require(!grant.disbursed, "grant has already been disbursed");
         Donation storage donation = donations[grant.donationId];
         require(!donation.withdrawn, "donation has been withdrawn");
-        require(block.number >= grant.proposedAt + donationGracePeriod, "donation grace period has not ended");
+        require(block.number >= grant.proposedAt + donation.gracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
         require(
             ERC20(donation.token).allowance(donation.donor, address(this)) >= donation.amount,
