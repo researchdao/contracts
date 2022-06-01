@@ -340,10 +340,7 @@ describe("DisintermediatedGrants", function () {
         it("fails if donation exceeds donor balance", async function () {
             const donorBalance = await this.token.balanceOf(this.alice.address)
             await this.token.connect(this.alice).approve(this.grants.address, donorBalance)
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultDonation,
-                amount: TEST_DONATION_AMOUNT,
-            })
+            const donationId = await setDonation(this.grants, this.defaultDonation)
             await this.token.connect(this.alice).transfer(this.bob.address, donorBalance)
             const grantId = await setGrant(this.grants, {
                 ...this.defaultGrant,
