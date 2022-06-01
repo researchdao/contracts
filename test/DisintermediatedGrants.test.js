@@ -104,6 +104,7 @@ describe("DisintermediatedGrants", function () {
             )
         })
         it("can be made by whitelisted donors", async function () {
+            const initialDonorBalance = await this.token.balanceOf(this.alice.address)
             await whitelistDonor(this.grants, this.alice.address)
             await this.token.connect(this.alice).approve(this.grants.address, TEST_DONATION_AMOUNT)
             const donationCount = await this.grants.donationCount()
@@ -116,6 +117,7 @@ describe("DisintermediatedGrants", function () {
             expect(donation.disbursedAmount).to.equal(0)
             expect(donation.withdrawn).to.equal(false)
             expect(await this.token.allowance(donation.donor, this.grants.address)).to.equal(TEST_DONATION_AMOUNT)
+            expect(await this.token.balanceOf(this.alice.address)).to.equal(initialDonorBalance)
         })
         it("fail if donation amount is zero", async function () {
             await whitelistDonor(this.grants, this.alice.address)
