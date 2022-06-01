@@ -180,9 +180,9 @@ describe("DisintermediatedGrants", function () {
             ).to.be.revertedWith("Ownable: caller is not the owner")
         })
         it("fail if donation does not exist", async function () {
-            await expect(
-                this.grants.proposeGrant(404, this.eve.address, TEST_DONATION_AMOUNT)
-            ).to.be.revertedWith("donation cannot cover full grant amount")
+            await expect(this.grants.proposeGrant(404, this.eve.address, TEST_DONATION_AMOUNT)).to.be.revertedWith(
+                "donation cannot cover full grant amount"
+            )
         })
         it("fail if donation cannot cover full grant amount", async function () {
             const donationId = await setDonation(this.grants, {
