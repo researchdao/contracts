@@ -181,7 +181,7 @@ describe("DisintermediatedGrants", function () {
         })
         it("fail if donation does not exist", async function () {
             await expect(
-                this.grants.proposeGrant(404, this.eve.address, TEST_DONATION_AMOUNT.mul(2))
+                this.grants.proposeGrant(404, this.eve.address, TEST_DONATION_AMOUNT)
             ).to.be.revertedWith("donation cannot cover full grant amount")
         })
         it("fail if donation cannot cover full grant amount", async function () {
