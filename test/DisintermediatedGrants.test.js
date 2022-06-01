@@ -216,7 +216,7 @@ describe("DisintermediatedGrants", function () {
                 this.dg.connect(this.multisig).proposeGrant({
                     donationId,
                     recipient: this.eve.address,
-                    amount: TEST_DONATION_AMOUNT.mul(2),
+                    amount: TEST_DONATION_AMOUNT + 1,
                 })
             ).to.be.revertedWith("donation cannot cover full grant amount")
         })
