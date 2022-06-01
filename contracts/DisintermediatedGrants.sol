@@ -107,6 +107,7 @@ contract DisintermediatedGrants {
     }
 
     function proposeGrant(GrantProposal memory _grantProposal) public onlyMultisig {
+        require(_grantProposal.donationId < donationCount, "donation does not exist");
         Donation memory donation = donations[_grantProposal.donationId];
         require(
             donation.amount - donation.disbursedAmount >= _grantProposal.amount,
@@ -122,8 +123,8 @@ contract DisintermediatedGrants {
         });
 
         grants[grantCount] = grant;
-
         grantCount += 1;
+
         emit ProposeGrant(grant);
     }
 

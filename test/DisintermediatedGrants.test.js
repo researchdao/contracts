@@ -205,7 +205,7 @@ describe("DisintermediatedGrants", function () {
                     recipient: this.eve.address,
                     amount: TEST_DONATION_AMOUNT,
                 })
-            ).to.be.revertedWith("donation cannot cover full grant amount")
+            ).to.be.revertedWith("donation does not exist")
         })
         it("fail if donation cannot cover full grant amount", async function () {
             const donationId = await setDonation(this.dg, {
