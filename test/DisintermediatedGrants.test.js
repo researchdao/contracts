@@ -323,11 +323,11 @@ describe("DisintermediatedGrants", function () {
             await expect(this.grants.disburseGrant(grantId)).to.be.revertedWith("grant amount exceeds donation balance")
         })
         it("fails if donor has removed allowance", async function () {
-            await this.token.connect(this.alice).approve(this.grants.address, 0)
             const donationId = await setDonation(this.grants, {
                 ...this.defaultDonation,
                 amount: TEST_DONATION_AMOUNT,
             })
+            await this.token.connect(this.alice).approve(this.grants.address, 0)
             const grantId = await setGrant(this.grants, {
                 ...this.defaultGrant,
                 donationId,
