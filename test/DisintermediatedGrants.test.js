@@ -403,7 +403,7 @@ describe("DisintermediatedGrants", function () {
                     to: this.dg.address,
                     value: ethers.BigNumber.from(100),
                 })
-            ).to.be.reverted
+            ).to.be.revertedWith("deposits not permitted")
         })
     })
 })

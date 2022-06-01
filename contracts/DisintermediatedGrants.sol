@@ -92,7 +92,7 @@ contract DisintermediatedGrants {
     }
 
     receive() external payable {
-        revert();
+        revert("deposits not permitted");
     }
 
     function withdrawDonation(uint256 _donationId) public {
