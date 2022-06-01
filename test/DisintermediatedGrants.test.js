@@ -3,8 +3,7 @@ const { ethers } = require("hardhat")
 const { smock } = require("@defi-wonderland/smock")
 
 const DONATION_GRACE_PERIOD = 10
-const ERC20_TOKEN_AMOUNT = ethers.BigNumber.from(100)
-const ETH_AMOUNT = ethers.BigNumber.from(100)
+const TEST_DONATION_AMOUNT = ethers.BigNumber.from(100)
 
 const whitelistDonor = (contract, donor) => {
     return contract.setVariable("donorWhitelisted", {
@@ -21,8 +20,8 @@ const setDonation = async (contract, donation, id) => {
     return donationId
 }
 
-const setGrant = async (contract, grant) => {
-    const grantId = await contract.grantCount()
+const setGrant = async (contract, grant, id) => {
+    const grantId = id || (await contract.grantCount())
     await contract.setVariable("grantCount", grantId + 1)
     await contract.setVariable("grants", {
         [grantId]: grant,
@@ -49,35 +48,23 @@ describe("DisintermediatedGrants", function () {
         )
         this.grants = await this.DisintermediatedGrants.deployed()
         this.TestERC20 = await this.TestERC20Factory.deploy()
-        this.testERC20 = await this.TestERC20.deployed()
+        this.token = await this.TestERC20.deployed()
         this.parties.forEach(async (party) => {
-            await this.testERC20.connect(party).mint(ERC20_TOKEN_AMOUNT)
-            await this.testERC20.connect(party).approve(this.grants.address, ERC20_TOKEN_AMOUNT)
+            await this.token.connect(party).mint(TEST_DONATION_AMOUNT)
         })
-        this.defaultERC20Donation = {
+        this.defaultDonation = {
             donor: this.alice.address,
-            nativeToken: false,
-            token: this.testERC20.address,
-            amount: ERC20_TOKEN_AMOUNT,
+            token: this.token.address,
+            amount: TEST_DONATION_AMOUNT,
             disbursedAmount: 0,
             withdrawn: false,
         }
-        this.defaultNativeDonation = {
-            ...this.defaultERC20Donation,
-            nativeToken: true,
-            token: ethers.constants.AddressZero,
-            amount: ETH_AMOUNT,
-        }
-        this.defaultERC20Grant = {
+        this.defaultGrant = {
             donationId: 0,
             recipient: this.bob.address,
-            amount: ERC20_TOKEN_AMOUNT,
+            amount: TEST_DONATION_AMOUNT,
             disbursed: false,
             proposedAt: await ethers.provider.getBlockNumber(),
-        }
-        this.defaultNativeGrant = {
-            ...this.defaultERC20Grant,
-            amount: ETH_AMOUNT,
         }
     })
     describe("donors", function () {
@@ -94,75 +81,49 @@ describe("DisintermediatedGrants", function () {
             expect(await this.grants.donorWhitelisted(this.alice.address)).to.equal(true)
         })
     })
-    describe("ERC20 donations", function () {
+    describe("donations", function () {
         it("cannot be made by non-whitelisted donors", async function () {
             await expect(
-                this.grants.connect(this.eve).donate(this.testERC20.address, ERC20_TOKEN_AMOUNT)
+                this.grants.connect(this.eve).donate(this.token.address, TEST_DONATION_AMOUNT)
             ).to.be.revertedWith("caller is not whitelisted donor")
         })
         it("fail if donation amount exceeds donor balance", async function () {
             await whitelistDonor(this.grants, this.alice.address)
-            const donorBalance = await this.testERC20.balanceOf(this.alice.address)
+            const donorBalance = await this.token.balanceOf(this.alice.address)
             const donationAmount = donorBalance.add(1)
-            await this.testERC20.connect(this.alice).approve(this.grants.address, donationAmount)
-            await expect(
-                this.grants.connect(this.alice).donate(this.testERC20.address, donationAmount)
-            ).to.be.revertedWith("ERC20: transfer amount exceeds balance")
+            await this.token.connect(this.alice).approve(this.grants.address, donationAmount)
+            await expect(this.grants.connect(this.alice).donate(this.token.address, donationAmount)).to.be.revertedWith(
+                "donation amount exceeds balance"
+            )
         })
-        it("fail if donation amount exceeds donor allowance", async function () {
+        it("cannot be made with insufficient allowance", async function () {
             await whitelistDonor(this.grants, this.alice.address)
-            const donorBalance = await this.testERC20.balanceOf(this.alice.address)
-            await this.testERC20.connect(this.alice).approve(this.grants.address, 0)
-            await expect(
-                this.grants.connect(this.alice).donate(this.testERC20.address, donorBalance)
-            ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
+            const donorBalance = await this.token.balanceOf(this.alice.address)
+            await this.token.connect(this.alice).approve(this.grants.address, donorBalance.sub(1))
+            await expect(this.grants.connect(this.alice).donate(this.token.address, donorBalance)).to.be.revertedWith(
+                "insufficient donation amount allowance"
+            )
         })
         it("can be made by whitelisted donors", async function () {
+            const initialDonorBalance = await this.token.balanceOf(this.alice.address)
             await whitelistDonor(this.grants, this.alice.address)
+            await this.token.connect(this.alice).approve(this.grants.address, TEST_DONATION_AMOUNT)
             const donationCount = await this.grants.donationCount()
-            const tx = await this.grants.connect(this.alice).donate(this.testERC20.address, ERC20_TOKEN_AMOUNT)
+            const tx = await this.grants.connect(this.alice).donate(this.token.address, TEST_DONATION_AMOUNT)
             const donation = await this.grants.donations(donationCount)
+            await expect(tx).to.emit(this.grants, "Donate").withArgs(donation)
             expect(donation.donor).to.equal(this.alice.address)
-            expect(donation.nativeToken).to.equal(false)
-            expect(donation.token).to.equal(this.testERC20.address)
-            expect(donation.amount).to.equal(ERC20_TOKEN_AMOUNT)
+            expect(donation.token).to.equal(this.token.address)
+            expect(donation.amount).to.equal(TEST_DONATION_AMOUNT)
             expect(donation.disbursedAmount).to.equal(0)
             expect(donation.withdrawn).to.equal(false)
-            await expect(tx).to.emit(this.grants, "Donate").withArgs(donation)
-            expect(await this.testERC20.balanceOf(this.grants.address)).to.equal(ERC20_TOKEN_AMOUNT)
+            expect(await this.token.allowance(donation.donor, this.grants.address)).to.equal(TEST_DONATION_AMOUNT)
+            expect(await this.token.balanceOf(this.alice.address)).to.equal(initialDonorBalance)
         })
         it("fail if donation amount is zero", async function () {
             await whitelistDonor(this.grants, this.alice.address)
             const donationCount = await this.grants.donationCount()
-            await expect(this.grants.connect(this.alice).donate(this.testERC20.address, 0)).to.be.revertedWith(
-                "donation amount cannot be zero"
-            )
-        })
-    })
-    describe("native donations", function () {
-        it("cannot be made by non-whitelisted donors", async function () {
-            await expect(this.grants.connect(this.eve).donateNative({ value: ETH_AMOUNT })).to.be.revertedWith(
-                "caller is not whitelisted donor"
-            )
-        })
-        it("can be made by whitelisted donors", async function () {
-            await whitelistDonor(this.grants, this.alice.address)
-            const donationCount = await this.grants.donationCount()
-            const tx = await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
-            const donation = await this.grants.donations(donationCount)
-            expect(donation.donor).to.equal(this.alice.address)
-            expect(donation.nativeToken).to.equal(true)
-            expect(donation.token).to.equal(ethers.constants.AddressZero)
-            expect(donation.amount).to.equal(ETH_AMOUNT)
-            expect(donation.disbursedAmount).to.equal(0)
-            expect(donation.withdrawn).to.equal(false)
-            await expect(tx).to.emit(this.grants, "Donate").withArgs(donation)
-            expect(await ethers.provider.getBalance(this.grants.address)).to.equal(ETH_AMOUNT)
-        })
-        it("fail if donation amount is zero", async function () {
-            await whitelistDonor(this.grants, this.alice.address)
-            const donationCount = await this.grants.donationCount()
-            await expect(this.grants.connect(this.alice).donateNative({ value: 0 })).to.be.revertedWith(
+            await expect(this.grants.connect(this.alice).donate(this.token.address, 0)).to.be.revertedWith(
                 "donation amount cannot be zero"
             )
         })
@@ -171,129 +132,55 @@ describe("DisintermediatedGrants", function () {
         before(async function () {
             await whitelistDonor(this.grants, this.alice.address)
         })
-        it("fails for ERC20 donations if already withdrawn", async function () {
+        it("fails if already withdrawn", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
+                ...this.defaultDonation,
                 withdrawn: true,
             })
             await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
                 "donation has already been withdrawn"
             )
         })
-        it("fails for native donations if already withdrawn", async function () {
+        it("fails if caller is not the donor", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                withdrawn: true,
-            })
-            await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
-                "donation has already been withdrawn"
-            )
-        })
-        it("fails for ERC20 donations if caller is not the donor", async function () {
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
+                ...this.defaultDonation,
                 donor: this.alice.address,
             })
             await expect(this.grants.connect(this.eve).withdrawDonation(donationId)).to.be.revertedWith(
                 "caller is not donor"
             )
         })
-        it("fails for native donations if caller is not the donor", async function () {
+        it("fails for fully disbursed donations", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                donor: this.alice.address,
-            })
-            await expect(this.grants.connect(this.eve).withdrawDonation(donationId)).to.be.revertedWith(
-                "caller is not donor"
-            )
-        })
-        it("fails for ERC20 donations that have been fully disbursed", async function () {
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
-                disbursedAmount: ERC20_TOKEN_AMOUNT,
+                ...this.defaultDonation,
+                disbursedAmount: TEST_DONATION_AMOUNT,
             })
             await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
                 "donation has been fully disbursed"
             )
         })
-        it("fails for native donations that have been fully disbursed", async function () {
+        it("withdraws donation", async function () {
+            const withdrawalAmount = this.defaultDonation.amount.div(2)
+            await this.token.connect(this.alice).approve(this.grants.address, this.defaultDonation.amount)
             const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                disbursedAmount: ETH_AMOUNT,
-            })
-            await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
-                "donation has been fully disbursed"
-            )
-        })
-        it("fails if ERC20 donation amount exceeds contract balance", async function () {
-            const contractBalance = await this.testERC20.balanceOf(this.grants.address)
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
-                amount: contractBalance.add(1),
-            })
-            await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
-                "ERC20: transfer amount exceeds balance"
-            )
-        })
-        it("fails if native donation amount exceeds contract balance", async function () {
-            const contractBalance = await ethers.provider.getBalance(this.grants.address)
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                amount: contractBalance.add(1),
-            })
-            await expect(this.grants.connect(this.alice).withdrawDonation(donationId)).to.be.reverted
-        })
-        it("withdraws ERC20 funds to donor", async function () {
-            const withdrawalAmount = ERC20_TOKEN_AMOUNT.div(2)
-            await this.testERC20.connect(this.alice).transfer(this.grants.address, withdrawalAmount)
-            const donorBalance = await this.testERC20.balanceOf(this.alice.address)
-            const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
+                ...this.defaultDonation,
                 donor: this.alice.address,
-                disbursedAmount: ERC20_TOKEN_AMOUNT.sub(withdrawalAmount),
+                disbursedAmount: this.defaultDonation.amount.sub(withdrawalAmount),
             })
             const tx = await this.grants.connect(this.alice).withdrawDonation(donationId)
             const donation = await this.grants.donations(donationId)
             expect(donation.withdrawn).to.equal(true)
             await expect(tx).to.emit(this.grants, "WithdrawDonation").withArgs(donation)
-            await expect(tx)
-                .to.emit(this.testERC20, "Transfer")
-                .withArgs(this.grants.address, this.alice.address, withdrawalAmount)
-            expect(await this.testERC20.balanceOf(this.alice.address)).to.equal(donorBalance.add(withdrawalAmount))
-        })
-        it("withdraws native funds to donor", async function () {
-            await whitelistDonor(this.grants, this.alice.address)
-            const donationCount = await this.grants.donationCount()
-            await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
-            const withdrawalAmount = ETH_AMOUNT.div(2)
-            const donorBalance = await ethers.provider.getBalance(this.alice.address)
-            const donationId = await setDonation(
-                this.grants,
-                {
-                    ...this.defaultNativeDonation,
-                    amount: ETH_AMOUNT,
-                    disbursedAmount: ETH_AMOUNT.sub(withdrawalAmount),
-                },
-                donationCount
-            )
-            const tx = await this.grants.connect(this.alice).withdrawDonation(donationId)
-            const receipt = await tx.wait()
-            const donation = await this.grants.donations(donationId)
-            expect(donation.withdrawn).to.equal(true)
-            await expect(tx).to.emit(this.grants, "WithdrawDonation").withArgs(donation)
-            expect(await ethers.provider.getBalance(this.alice.address)).to.equal(
-                donorBalance.sub(receipt.gasUsed.mul(receipt.effectiveGasPrice)).add(withdrawalAmount)
-            )
         })
     })
     describe("grant proposals", function () {
         it("cannot be created by non-multisig", async function () {
-            const donationId = await setDonation(this.grants, this.defaultNativeDonation)
+            const donationId = await setDonation(this.grants, this.defaultDonation)
             await expect(
                 this.grants.connect(this.eve).proposeGrant({
                     donationId,
                     recipient: this.eve.address,
-                    amount: ETH_AMOUNT,
+                    amount: TEST_DONATION_AMOUNT,
                 })
             ).to.be.revertedWith("caller is not the multisig")
         })
@@ -302,38 +189,38 @@ describe("DisintermediatedGrants", function () {
                 this.grants.connect(this.multisig).proposeGrant({
                     donationId: 404,
                     recipient: this.eve.address,
-                    amount: ETH_AMOUNT.mul(2),
+                    amount: TEST_DONATION_AMOUNT,
                 })
             ).to.be.revertedWith("donation cannot cover full grant amount")
         })
         it("fail if donation cannot cover full grant amount", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                amount: ETH_AMOUNT,
+                ...this.defaultDonation,
+                amount: TEST_DONATION_AMOUNT,
             })
             await expect(
                 this.grants.connect(this.multisig).proposeGrant({
                     donationId,
                     recipient: this.eve.address,
-                    amount: ETH_AMOUNT.mul(2),
+                    amount: TEST_DONATION_AMOUNT.mul(2),
                 })
             ).to.be.revertedWith("donation cannot cover full grant amount")
         })
         it("can be created by multisig", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                amount: ETH_AMOUNT,
+                ...this.defaultDonation,
+                amount: TEST_DONATION_AMOUNT,
             })
             const grantCount = await this.grants.grantCount()
             const tx = await this.grants.connect(this.multisig).proposeGrant({
                 donationId,
                 recipient: this.bob.address,
-                amount: ETH_AMOUNT,
+                amount: TEST_DONATION_AMOUNT,
             })
             const grant = await this.grants.grants(grantCount)
             await expect(grant.donationId).to.equal(donationId)
             await expect(grant.recipient).to.equal(this.bob.address)
-            await expect(grant.amount).to.equal(ETH_AMOUNT)
+            await expect(grant.amount).to.equal(TEST_DONATION_AMOUNT)
             await expect(grant.disbursed).to.equal(false)
             await expect(grant.proposedAt).to.equal(tx.blockNumber)
             await expect(tx).to.emit(this.grants, "ProposeGrant").withArgs(grant)
@@ -342,20 +229,20 @@ describe("DisintermediatedGrants", function () {
     describe("multiple grant proposals", function () {
         beforeEach(async function () {
             const [donationAId, donationBId] = [
-                await setDonation(this.grants, this.defaultERC20Donation),
-                await setDonation(this.grants, this.defaultNativeDonation),
+                await setDonation(this.grants, this.defaultDonation),
+                await setDonation(this.grants, this.defaultDonation),
             ]
 
             const [grantAProposal, grantBProposal] = [
                 {
                     donationId: donationAId,
                     recipient: this.bob.address,
-                    amount: ERC20_TOKEN_AMOUNT,
+                    amount: TEST_DONATION_AMOUNT,
                 },
                 {
                     donationId: donationBId,
                     recipient: this.bob.address,
-                    amount: ETH_AMOUNT,
+                    amount: TEST_DONATION_AMOUNT,
                 },
             ]
 
@@ -383,7 +270,7 @@ describe("DisintermediatedGrants", function () {
     describe("grant disbursal", function () {
         it("fails if grant has already been disbursed", async function () {
             const grantId = await setGrant(this.grants, {
-                ...this.defaultERC20Grant,
+                ...this.defaultGrant,
                 disbursed: true,
             })
             await expect(this.grants.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith(
@@ -395,7 +282,7 @@ describe("DisintermediatedGrants", function () {
         })
         it("fails if donation does not exist", async function () {
             const grantId = await setGrant(this.grants, {
-                ...this.defaultERC20Grant,
+                ...this.defaultGrant,
                 donationId: 404,
                 proposedAt: 0,
             })
@@ -405,11 +292,11 @@ describe("DisintermediatedGrants", function () {
         })
         it("fails if donation has been withdrawn", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
+                ...this.defaultDonation,
                 withdrawn: true,
             })
             const grantId = await setGrant(this.grants, {
-                ...this.defaultERC20Grant,
+                ...this.defaultGrant,
                 donationId,
             })
             await expect(this.grants.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith(
@@ -417,9 +304,9 @@ describe("DisintermediatedGrants", function () {
             )
         })
         it("fails if donation grace period has not ended", async function () {
-            const donationId = await setDonation(this.grants, this.defaultERC20Donation)
+            const donationId = await setDonation(this.grants, this.defaultDonation)
             const grantId = await setGrant(this.grants, {
-                ...this.defaultERC20Grant,
+                ...this.defaultGrant,
                 donationId,
                 proposedAt: await ethers.provider.getBlockNumber(),
             })
@@ -429,56 +316,58 @@ describe("DisintermediatedGrants", function () {
         })
         it("fails if grant amount exceeds donation balance", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
-                amount: ERC20_TOKEN_AMOUNT,
-                disbursedAmount: ERC20_TOKEN_AMOUNT.div(2),
+                ...this.defaultDonation,
+                amount: TEST_DONATION_AMOUNT,
+                disbursedAmount: TEST_DONATION_AMOUNT.div(2),
             })
             const grantId = await setGrant(this.grants, {
-                ...this.defaultERC20Grant,
+                ...this.defaultGrant,
                 donationId,
-                amount: ERC20_TOKEN_AMOUNT,
+                amount: TEST_DONATION_AMOUNT,
                 proposedAt: 0,
             })
             await expect(this.grants.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith(
                 "grant amount exceeds donation balance"
             )
         })
-        it("fails if native grant amount exceeds contract balance", async function () {
-            const contractBalance = await ethers.provider.getBalance(this.grants.address)
+        it("fails if donor has removed allowance", async function () {
             const donationId = await setDonation(this.grants, {
-                ...this.defaultNativeDonation,
-                amount: contractBalance.add(1),
+                ...this.defaultDonation,
+                amount: TEST_DONATION_AMOUNT,
             })
+            await this.token.connect(this.alice).approve(this.grants.address, 0)
             const grantId = await setGrant(this.grants, {
-                ...this.defaultNativeGrant,
+                ...this.defaultGrant,
                 donationId,
-                amount: contractBalance.add(1),
+                amount: TEST_DONATION_AMOUNT,
                 proposedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
             })
-            await expect(this.grants.connect(this.bob).disburseGrant(grantId)).to.be.reverted
+            await expect(this.grants.disburseGrant(grantId)).to.be.revertedWith("donor has removed allowance")
         })
-        it("fails if ERC20 grant amount exceeds contract balance", async function () {
-            const contractBalance = await this.testERC20.balanceOf(this.grants.address)
+        it("fails if donation exceeds donor balance", async function () {
+            const donorBalance = await this.token.balanceOf(this.alice.address)
+            await this.token.connect(this.alice).approve(this.grants.address, donorBalance)
             const donationId = await setDonation(this.grants, {
-                ...this.defaultERC20Donation,
-                amount: contractBalance.add(1),
+                ...this.defaultDonation,
+                amount: donorBalance,
             })
+            await this.token.connect(this.alice).transfer(this.bob.address, donorBalance)
             const grantId = await setGrant(this.grants, {
-                ...this.defaultERC20Grant,
+                ...this.defaultGrant,
                 donationId,
-                amount: contractBalance.add(1),
+                amount: donorBalance,
                 proposedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
             })
             await expect(this.grants.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith(
                 "ERC20: transfer amount exceeds balance"
             )
         })
-        it("transfers ERC20 grant amount to recipient", async function () {
-            await this.testERC20.connect(this.alice).transfer(this.grants.address, ERC20_TOKEN_AMOUNT)
-            const grantRecipientBalance = await this.testERC20.balanceOf(this.bob.address)
-            const donationId = await setDonation(this.grants, this.defaultERC20Donation)
+        it("transfers grant amount to recipient", async function () {
+            await this.token.connect(this.alice).approve(this.grants.address, TEST_DONATION_AMOUNT)
+            const grantRecipientBalance = await this.token.balanceOf(this.bob.address)
+            const donationId = await setDonation(this.grants, this.defaultDonation)
             const grantId = await setGrant(this.grants, {
-                ...this.defaultERC20Grant,
+                ...this.defaultGrant,
                 donationId,
                 proposedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
             })
@@ -490,46 +379,17 @@ describe("DisintermediatedGrants", function () {
             expect(grant.disbursed).to.equal(true)
             await expect(tx).to.emit(this.grants, "DisburseGrant").withArgs(grant)
             await expect(tx)
-                .to.emit(this.testERC20, "Transfer")
-                .withArgs(this.grants.address, this.bob.address, grant.amount)
-            expect(await this.testERC20.balanceOf(this.bob.address)).to.equal(grantRecipientBalance.add(grant.amount))
-        })
-        it("transfers native grant amount to recipient", async function () {
-            await whitelistDonor(this.grants, this.alice.address)
-            const donationCount = await this.grants.donationCount()
-            await this.grants.connect(this.alice).donateNative({ value: ETH_AMOUNT })
-            const grantRecipientBalance = await ethers.provider.getBalance(this.bob.address)
-            const donationId = await setDonation(
-                this.grants,
-                {
-                    ...this.defaultNativeDonation,
-                    amount: ETH_AMOUNT,
-                    disbursedAmount: 0,
-                },
-                donationCount
-            )
-            const grantId = await setGrant(this.grants, {
-                ...this.defaultNativeGrant,
-                donationId,
-                amount: ETH_AMOUNT.div(2),
-                proposedAt: (await ethers.provider.getBlockNumber()) - DONATION_GRACE_PERIOD,
-            })
-            const tx = await this.grants.disburseGrant(grantId)
-            const receipt = await tx.wait()
-            const donation = await this.grants.donations(donationId)
-            const grant = await this.grants.grants(grantId)
-            expect(donation.disbursedAmount).to.equal(grant.amount)
-            expect(grant.disbursed).to.equal(true)
-            await expect(tx).to.emit(this.grants, "DisburseGrant").withArgs(grant)
-            expect(await ethers.provider.getBalance(this.bob.address)).to.equal(grantRecipientBalance.add(grant.amount))
+                .to.emit(this.token, "Transfer")
+                .withArgs(this.alice.address, this.bob.address, grant.amount)
+            expect(await this.token.balanceOf(this.bob.address)).to.equal(grantRecipientBalance.add(grant.amount))
         })
     })
     describe("native transfers", function () {
-        it("revert", async function () {
+        it("not permitted", async function () {
             await expect(
                 this.alice.sendTransaction({
                     to: this.grants.address,
-                    value: ETH_AMOUNT,
+                    value: ethers.BigNumber.from(100),
                 })
             ).to.be.reverted
         })
