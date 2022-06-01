@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract DisintermediatedGrants is Ownable {
+contract DisintermediatedGrants {
     address public immutable multisig;
 
     uint256 public donationCount = 0;
@@ -14,7 +13,6 @@ contract DisintermediatedGrants is Ownable {
 
     struct Donation {
         address donor;
-        bool nativeToken;
         address token;
         uint256 amount;
         uint256 disbursedAmount;
@@ -26,9 +24,14 @@ contract DisintermediatedGrants is Ownable {
         uint256 donationId;
         address recipient;
         uint256 amount;
-        bool endorsed;
         bool disbursed;
-        uint256 endorsedAt;
+        uint256 proposedAt;
+    }
+
+    struct GrantProposal {
+        uint256 donationId;
+        address recipient;
+        uint256 amount;
     }
 
     mapping(address => bool) public donorWhitelisted;
@@ -39,7 +42,6 @@ contract DisintermediatedGrants is Ownable {
     event Donate(Donation donation);
     event WithdrawDonation(Donation donation);
     event ProposeGrant(Grant grant);
-    event EndorseGrant(Grant grant);
     event DisburseGrant(Grant grant);
 
     modifier onlyWhitelistedDonor() {
@@ -56,7 +58,7 @@ contract DisintermediatedGrants is Ownable {
         multisig = _multisig;
     }
 
-    function whitelistDonor(address _donor) public onlyOwner {
+    function whitelistDonor(address _donor) public onlyMultisig {
         donorWhitelisted[_donor] = true;
         emit WhitelistDonor(_donor);
     }
@@ -68,9 +70,14 @@ contract DisintermediatedGrants is Ownable {
     ) public onlyWhitelistedDonor {
         require(_amount > 0, "donation amount cannot be zero");
         require(_gracePeriod <= MAX_DONATION_GRACE_PERIOD, "withdrawal grace period is too long");
+        require(ERC20(_token).balanceOf(msg.sender) >= _amount, "donation amount exceeds balance");
+        require(
+            ERC20(_token).allowance(msg.sender, address(this)) >= _amount,
+            "insufficient donation amount allowance"
+        );
+
         Donation memory donation = Donation({
             donor: msg.sender,
-            nativeToken: false,
             token: _token,
             amount: _amount,
             disbursedAmount: 0,
@@ -82,30 +89,10 @@ contract DisintermediatedGrants is Ownable {
         donationCount += 1;
 
         emit Donate(donation);
-        IERC20Metadata(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
     receive() external payable {
         revert();
-    }
-
-    function donateNative(uint32 _gracePeriod) public payable onlyWhitelistedDonor {
-        require(msg.value > 0, "donation amount cannot be zero");
-        require(_gracePeriod <= MAX_DONATION_GRACE_PERIOD, "withdrawal grace period is too long");
-        Donation memory donation = Donation({
-            donor: msg.sender,
-            nativeToken: true,
-            token: address(0),
-            amount: msg.value,
-            disbursedAmount: 0,
-            gracePeriod: _gracePeriod,
-            withdrawn: false
-        });
-
-        donations[donationCount] = donation;
-        donationCount += 1;
-
-        emit Donate(donation);
     }
 
     function withdrawDonation(uint256 _donationId) public {
@@ -117,28 +104,21 @@ contract DisintermediatedGrants is Ownable {
         donation.withdrawn = true;
 
         emit WithdrawDonation(donation);
-        if (donation.nativeToken) {
-            payable(donation.donor).transfer(donation.amount - donation.disbursedAmount);
-        } else {
-            IERC20Metadata(donation.token).transfer(donation.donor, donation.amount - donation.disbursedAmount);
-        }
     }
 
-    function proposeGrant(
-        uint256 _donationId,
-        address _recipient,
-        uint256 _amount
-    ) public onlyOwner {
-        Donation memory donation = donations[_donationId];
-        require(donation.amount - donation.disbursedAmount >= _amount, "donation cannot cover full grant amount");
+    function proposeGrant(GrantProposal memory _grantProposal) public onlyMultisig {
+        Donation memory donation = donations[_grantProposal.donationId];
+        require(
+            donation.amount - donation.disbursedAmount >= _grantProposal.amount,
+            "donation cannot cover full grant amount"
+        );
 
         Grant memory grant = Grant({
-            donationId: _donationId,
-            recipient: _recipient,
-            amount: _amount,
-            endorsed: false,
+            donationId: _grantProposal.donationId,
+            recipient: _grantProposal.recipient,
+            amount: _grantProposal.amount,
             disbursed: false,
-            endorsedAt: 0
+            proposedAt: block.number
         });
 
         grants[grantCount] = grant;
@@ -147,36 +127,29 @@ contract DisintermediatedGrants is Ownable {
         emit ProposeGrant(grant);
     }
 
-    function endorseGrant(uint256 _grantId) public onlyMultisig {
-        Grant storage grant = grants[_grantId];
-        grant.endorsed = true;
-        grant.endorsedAt = block.number;
-        emit EndorseGrant(grant);
-    }
-
-    function endorseGrants(uint256[] memory _grantIds) public {
-        for (uint16 i = 0; i < _grantIds.length; ++i) {
-            endorseGrant(_grantIds[i]);
+    function proposeGrants(GrantProposal[] memory _grantProposals) public {
+        for (uint16 i = 0; i < _grantProposals.length; ++i) {
+            proposeGrant(_grantProposals[i]);
         }
     }
 
     function disburseGrant(uint256 _grantId) public {
+        require(_grantId < grantCount, "grant does not exist");
         Grant storage grant = grants[_grantId];
         require(!grant.disbursed, "grant has already been disbursed");
         Donation storage donation = donations[grant.donationId];
         require(!donation.withdrawn, "donation has been withdrawn");
-        require(grant.endorsed, "grant has not been endorsed");
-        require(block.number >= grant.endorsedAt + donation.gracePeriod, "donation grace period has not ended");
+        require(block.number >= grant.proposedAt + donation.gracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
+        require(
+            ERC20(donation.token).allowance(donation.donor, address(this)) >= donation.amount,
+            "donor has removed allowance"
+        );
 
         donation.disbursedAmount += grant.amount;
         grant.disbursed = true;
 
         emit DisburseGrant(grant);
-        if (donation.nativeToken) {
-            payable(grant.recipient).transfer(grant.amount);
-        } else {
-            IERC20Metadata(donation.token).transfer(grant.recipient, grant.amount);
-        }
+        ERC20(donation.token).transferFrom(donation.donor, grant.recipient, grant.amount);
     }
 }
