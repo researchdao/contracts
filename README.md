@@ -8,4 +8,7 @@
 
 - Install dependencies: `npm i` 
 - Run tests: `npm test`
+- Run coverage: `npm run coverage`
+- Run linter: `npm run lint`
+- Run formatter: `npm run format`
 - Deploy: `npx hardhat run scripts/deploy.js --network {NETWORK}`
