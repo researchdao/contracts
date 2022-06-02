@@ -129,7 +129,7 @@ contract DisintermediatedGrants {
     }
 
     function proposeGrants(GrantProposal[] memory _grantProposals) public {
-        for (uint16 i = 0; i < _grantProposals.length; ++i) {
+        for (uint16 i = 0; i < _grantProposals.length; i++) {
             proposeGrant(_grantProposals[i]);
         }
     }
