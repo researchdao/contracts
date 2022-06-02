@@ -4,9 +4,10 @@
   "description": "ReaseachDAO smart contracts.",
   "main": "index.js",
   "scripts": {
-    "test": "npx hardhat test",
-    "coverage": "npx hardhat coverage",
-    "format": "prettier --write **/*.sol **/*.js"
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "coverage:check": "nyc check-coverage",
+    "format": "prettier --write **/*.sol *.js **/*.js"
   },
   "author": "researchdao",
   "license": "MIT",
