@@ -5,11 +5,10 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract DisintermediatedGrants {
     address public immutable multisig;
+    uint32 public immutable maxDonationGracePeriod;
 
     uint256 public donationCount = 0;
     uint256 public grantCount = 0;
-
-    uint32 public constant MAX_DONATION_GRACE_PERIOD = 600_000;
 
     struct Donation {
         address donor;
@@ -54,8 +53,9 @@ contract DisintermediatedGrants {
         _;
     }
 
-    constructor(address _multisig) {
+    constructor(address _multisig, uint32 _maxDonationGracePeriod) {
         multisig = _multisig;
+        maxDonationGracePeriod = _maxDonationGracePeriod;
     }
 
     function whitelistDonor(address _donor) public onlyMultisig {
@@ -69,7 +69,7 @@ contract DisintermediatedGrants {
         uint32 _gracePeriod
     ) public onlyWhitelistedDonor {
         require(_amount > 0, "donation amount cannot be zero");
-        require(_gracePeriod <= MAX_DONATION_GRACE_PERIOD, "withdrawal grace period is too long");
+        require(_gracePeriod <= maxDonationGracePeriod, "withdrawal grace period is too long");
         require(ERC20(_token).balanceOf(msg.sender) >= _amount, "donation amount exceeds balance");
         require(
             ERC20(_token).allowance(msg.sender, address(this)) >= _amount,

@@ -4,6 +4,7 @@ const { smock } = require("@defi-wonderland/smock")
 
 const TEST_DONATION_AMOUNT = ethers.BigNumber.from(100)
 const TEST_GRACE_PERIOD = 10
+const MAX_DONATION_GRACE_PERIOD = 10
 
 const whitelistDonor = (contract, donor) => {
     return contract.setVariable("donorWhitelisted", {
@@ -43,7 +44,8 @@ describe("DisintermediatedGrants", function () {
     })
     beforeEach(async function () {
         this.DisintermediatedGrants = await this.DisintermediatedGrantsFactory.connect(this.deployer).deploy(
-            this.multisig.address
+            this.multisig.address,
+            MAX_DONATION_GRACE_PERIOD
         )
         this.dg = await this.DisintermediatedGrants.deployed()
         this.TestERC20 = await this.TestERC20Factory.deploy()
@@ -139,7 +141,7 @@ describe("DisintermediatedGrants", function () {
             await expect(
                 this.dg
                     .connect(this.alice)
-                    .donate(this.token.address, TEST_DONATION_AMOUNT, (await this.dg.MAX_DONATION_GRACE_PERIOD()) + 1)
+                    .donate(this.token.address, TEST_DONATION_AMOUNT, (await this.dg.maxDonationGracePeriod()) + 1)
             ).to.be.revertedWith("withdrawal grace period is too long")
         })
     })
