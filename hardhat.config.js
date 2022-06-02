@@ -2,7 +2,8 @@ require("@nomiclabs/hardhat-waffle")
 require("solidity-coverage")
 require("dotenv").config()
 
-const HARMONY_PRIVATE_KEY = process.env.HARMONY_PRIVATE_KEY
+const DUMMY_PRIVATE_KEY = "0336e9be71c31d71d086d9f0887d13cb6701bc45d11b70bb7c14200c9feebe22"
+const HARMONY_PRIVATE_KEY = process.env.HARMONY_PRIVATE_KEY || DUMMY_PRIVATE_KEY
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
