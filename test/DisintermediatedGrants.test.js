@@ -62,7 +62,6 @@ describe("DisintermediatedGrants", function () {
             amount: TEST_DONATION_AMOUNT,
             disbursedAmount: 0,
             gracePeriod: 10,
-            withdrawn: false,
         }
         this.defaultGrant = {
             donationId: 0,
@@ -124,7 +123,6 @@ describe("DisintermediatedGrants", function () {
             expect(donation.amount).to.equal(TEST_DONATION_AMOUNT)
             expect(donation.disbursedAmount).to.equal(0)
             expect(donation.gracePeriod).to.equal(TEST_GRACE_PERIOD)
-            expect(donation.withdrawn).to.equal(false)
             expect(await this.token.allowance(donation.donor, this.dg.address)).to.equal(TEST_DONATION_AMOUNT)
             expect(await this.token.balanceOf(this.alice.address)).to.equal(initialDonorBalance)
         })
@@ -143,53 +141,6 @@ describe("DisintermediatedGrants", function () {
                     .connect(this.alice)
                     .donate(this.token.address, TEST_DONATION_AMOUNT, (await this.dg.maxDonationGracePeriod()) + 1)
             ).to.be.revertedWith("withdrawal grace period is too long")
-        })
-    })
-    describe("donation withdrawal", function () {
-        before(async function () {
-            await this.whitelistDonor(this.alice.address)
-        })
-        it("fails if already withdrawn", async function () {
-            const donationId = await this.setDonation({
-                ...this.defaultDonation,
-                withdrawn: true,
-            })
-            await expect(this.dg.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
-                "donation has already been withdrawn"
-            )
-        })
-        it("fails if caller is not the donor", async function () {
-            const donationId = await this.setDonation({
-                ...this.defaultDonation,
-                donor: this.alice.address,
-            })
-            await expect(this.dg.connect(this.eve).withdrawDonation(donationId)).to.be.revertedWith(
-                "caller is not donor"
-            )
-        })
-        it("fails for fully disbursed donations", async function () {
-            const donationId = await this.setDonation({
-                ...this.defaultDonation,
-                disbursedAmount: TEST_DONATION_AMOUNT,
-            })
-            await expect(this.dg.connect(this.alice).withdrawDonation(donationId)).to.be.revertedWith(
-                "donation has been fully disbursed"
-            )
-        })
-        it("withdraws donation", async function () {
-            const donorBalance = await this.token.balanceOf(this.alice.address)
-            const withdrawalAmount = this.defaultDonation.amount.div(2)
-            await this.token.connect(this.alice).approve(this.dg.address, this.defaultDonation.amount)
-            const donationId = await this.setDonation({
-                ...this.defaultDonation,
-                donor: this.alice.address,
-                disbursedAmount: this.defaultDonation.amount.sub(withdrawalAmount),
-            })
-            const tx = await this.dg.connect(this.alice).withdrawDonation(donationId)
-            const donation = await this.dg.donations(donationId)
-            expect(donation.withdrawn).to.equal(true)
-            await expect(tx).to.emit(this.dg, "WithdrawDonation").withArgs(donation)
-            expect(await this.token.balanceOf(this.alice.address)).to.equal(donorBalance)
         })
     })
     describe("grant proposals", function () {
@@ -305,19 +256,6 @@ describe("DisintermediatedGrants", function () {
             })
             await expect(this.dg.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith(
                 "grant amount exceeds donation balance"
-            )
-        })
-        it("fails if donation has been withdrawn", async function () {
-            const donationId = await this.setDonation({
-                ...this.defaultDonation,
-                withdrawn: true,
-            })
-            const grantId = await this.setGrant({
-                ...this.defaultGrant,
-                donationId,
-            })
-            await expect(this.dg.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith(
-                "donation has been withdrawn"
             )
         })
         it("fails if donation grace period has not ended", async function () {
