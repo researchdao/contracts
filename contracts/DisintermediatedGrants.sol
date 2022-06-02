@@ -16,7 +16,6 @@ contract DisintermediatedGrants {
         uint256 amount;
         uint256 disbursedAmount;
         uint32 gracePeriod;
-        bool withdrawn;
     }
 
     struct Grant {
@@ -39,7 +38,6 @@ contract DisintermediatedGrants {
 
     event WhitelistDonor(address donor);
     event Donate(Donation donation);
-    event WithdrawDonation(Donation donation);
     event ProposeGrant(Grant grant);
     event DisburseGrant(Grant grant);
 
@@ -81,8 +79,7 @@ contract DisintermediatedGrants {
             token: _token,
             amount: _amount,
             disbursedAmount: 0,
-            gracePeriod: _gracePeriod,
-            withdrawn: false
+            gracePeriod: _gracePeriod
         });
 
         donations[donationCount] = donation;
@@ -93,17 +90,6 @@ contract DisintermediatedGrants {
 
     receive() external payable {
         revert("deposits not permitted");
-    }
-
-    function withdrawDonation(uint256 _donationId) public {
-        Donation storage donation = donations[_donationId];
-        require(msg.sender == donation.donor, "caller is not donor");
-        require(!donation.withdrawn, "donation has already been withdrawn");
-        require(donation.amount > donation.disbursedAmount, "donation has been fully disbursed");
-
-        donation.withdrawn = true;
-
-        emit WithdrawDonation(donation);
     }
 
     function proposeGrant(GrantProposal memory _grantProposal) public onlyMultisig {
@@ -139,7 +125,6 @@ contract DisintermediatedGrants {
         Grant storage grant = grants[_grantId];
         require(!grant.disbursed, "grant has already been disbursed");
         Donation storage donation = donations[grant.donationId];
-        require(!donation.withdrawn, "donation has been withdrawn");
         require(block.number >= grant.proposedAt + donation.gracePeriod, "donation grace period has not ended");
         require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
         require(
