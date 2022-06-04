@@ -13,8 +13,6 @@ contract DisintermediatedGrants {
     struct Donation {
         address donor;
         address token;
-        uint256 amount;
-        uint256 disbursedAmount;
         uint32 gracePeriod;
     }
 
@@ -63,24 +61,21 @@ contract DisintermediatedGrants {
 
     function donate(
         address _token,
-        uint256 _amount,
+        uint256 _commitmentAmount,
         uint32 _gracePeriod
     ) public onlyWhitelistedDonor {
-        require(_amount > 0, "donation amount cannot be zero");
+        require(_commitmentAmount > 0, "commitment amount cannot be zero");
         require(_gracePeriod <= maxDonationGracePeriod, "withdrawal grace period is too long");
-        require(ERC20(_token).balanceOf(msg.sender) >= _amount, "donation amount exceeds balance");
         require(
-            ERC20(_token).allowance(msg.sender, address(this)) >= _amount,
-            "insufficient donation amount allowance"
+            ERC20(_token).balanceOf(msg.sender) >= _commitmentAmount,
+            "insufficient balance to cover commitment amount"
+        );
+        require(
+            ERC20(_token).allowance(msg.sender, address(this)) >= _commitmentAmount,
+            "insufficient allowance to cover commitment amount"
         );
 
-        Donation memory donation = Donation({
-            donor: msg.sender,
-            token: _token,
-            amount: _amount,
-            disbursedAmount: 0,
-            gracePeriod: _gracePeriod
-        });
+        Donation memory donation = Donation({donor: msg.sender, token: _token, gracePeriod: _gracePeriod});
 
         donations[donationCount] = donation;
         donationCount += 1;
@@ -94,12 +89,6 @@ contract DisintermediatedGrants {
 
     function proposeGrant(GrantProposal memory _grantProposal) public onlyMultisig {
         require(_grantProposal.donationId < donationCount, "donation does not exist");
-        Donation memory donation = donations[_grantProposal.donationId];
-        require(
-            donation.amount - donation.disbursedAmount >= _grantProposal.amount,
-            "donation cannot cover full grant amount"
-        );
-
         Grant memory grant = Grant({
             donationId: _grantProposal.donationId,
             recipient: _grantProposal.recipient,
@@ -124,15 +113,15 @@ contract DisintermediatedGrants {
         require(_grantId < grantCount, "grant does not exist");
         Grant storage grant = grants[_grantId];
         require(!grant.disbursed, "grant has already been disbursed");
+        require(grant.donationId < donationCount, "donation does not exist");
         Donation storage donation = donations[grant.donationId];
         require(block.number >= grant.proposedAt + donation.gracePeriod, "donation grace period has not ended");
-        require(grant.amount <= donation.amount - donation.disbursedAmount, "grant amount exceeds donation balance");
+        require(ERC20(donation.token).balanceOf(donation.donor) >= grant.amount, "insufficient donor balance");
         require(
-            ERC20(donation.token).allowance(donation.donor, address(this)) >= donation.amount,
-            "donor has removed allowance"
+            ERC20(donation.token).allowance(donation.donor, address(this)) >= grant.amount,
+            "insufficient donor allowance"
         );
 
-        donation.disbursedAmount += grant.amount;
         grant.disbursed = true;
 
         emit DisburseGrant(grant);
