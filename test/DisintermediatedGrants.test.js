@@ -235,8 +235,8 @@ describe("DisintermediatedGrants", function () {
             await expect(tx).to.emit(this.dg, "ProposeGrant").withArgs(grantB)
         })
     })
-    describe("grant disbursal", function () {
-        it("fails if grant has already been disbursed", async function () {
+    describe("grant disbursals", function () {
+        it("fail if grant has already been disbursed", async function () {
             const grantId = await this.setGrant({
                 ...this.defaultGrant,
                 disbursed: true,
@@ -245,10 +245,10 @@ describe("DisintermediatedGrants", function () {
                 "grant has already been disbursed"
             )
         })
-        it("fails if grant does not exist", async function () {
+        it("fail if grant does not exist", async function () {
             await expect(this.dg.connect(this.bob).disburseGrant(404)).to.be.revertedWith("grant does not exist")
         })
-        it("fails if donation does not exist", async function () {
+        it("fail if donation does not exist", async function () {
             const grantId = await this.setGrant({
                 ...this.defaultGrant,
                 donationId: 404,
@@ -258,7 +258,7 @@ describe("DisintermediatedGrants", function () {
                 "grant amount exceeds donation balance"
             )
         })
-        it("fails if donation grace period has not ended", async function () {
+        it("fail if donation grace period has not ended", async function () {
             const donationId = await this.setDonation(this.defaultDonation)
             const grantId = await this.setGrant({
                 ...this.defaultGrant,
@@ -269,7 +269,7 @@ describe("DisintermediatedGrants", function () {
                 "donation grace period has not ended"
             )
         })
-        it("fails if grant amount exceeds donation balance", async function () {
+        it("fail if grant amount exceeds donation balance", async function () {
             const donationId = await this.setDonation({
                 ...this.defaultDonation,
                 amount: TEST_DONATION_AMOUNT,
@@ -285,7 +285,7 @@ describe("DisintermediatedGrants", function () {
                 "grant amount exceeds donation balance"
             )
         })
-        it("fails if donor has removed allowance", async function () {
+        it("fail if donor has removed allowance", async function () {
             const donationId = await this.setDonation({
                 ...this.defaultDonation,
                 amount: TEST_DONATION_AMOUNT,
@@ -299,7 +299,7 @@ describe("DisintermediatedGrants", function () {
             })
             await expect(this.dg.disburseGrant(grantId)).to.be.revertedWith("donor has removed allowance")
         })
-        it("fails if donation exceeds donor balance", async function () {
+        it("fail if donation exceeds donor balance", async function () {
             const donorBalance = await this.token.balanceOf(this.alice.address)
             await this.token.connect(this.alice).approve(this.dg.address, donorBalance)
             const donationId = await this.setDonation({
@@ -317,7 +317,7 @@ describe("DisintermediatedGrants", function () {
                 "ERC20: transfer amount exceeds balance"
             )
         })
-        it("transfers grant amount to recipient", async function () {
+        it("transfer grant amount to recipient", async function () {
             await this.token.connect(this.alice).approve(this.dg.address, TEST_DONATION_AMOUNT)
             const grantRecipientBalance = await this.token.balanceOf(this.bob.address)
             const donationId = await this.setDonation(this.defaultDonation)
