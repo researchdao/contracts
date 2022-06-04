@@ -35,7 +35,7 @@ contract DisintermediatedGrants {
     mapping(uint256 => Grant) public grants;
 
     event WhitelistDonor(address donor);
-    event Donate(Donation donation);
+    event Donate(uint256 commitmentAmount, Donation donation);
     event ProposeGrant(Grant grant);
     event DisburseGrant(Grant grant);
 
@@ -80,7 +80,7 @@ contract DisintermediatedGrants {
         donations[donationCount] = donation;
         donationCount += 1;
 
-        emit Donate(donation);
+        emit Donate(_commitmentAmount, donation);
     }
 
     receive() external payable {

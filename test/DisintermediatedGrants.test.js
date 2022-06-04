@@ -115,7 +115,7 @@ describe("DisintermediatedGrants", function () {
                 .connect(this.alice)
                 .donate(this.token.address, TEST_DONATION_AMOUNT, TEST_GRACE_PERIOD)
             const donation = await this.dg.donations(donationCount)
-            await expect(tx).to.emit(this.dg, "Donate").withArgs(donation)
+            await expect(tx).to.emit(this.dg, "Donate").withArgs(TEST_DONATION_AMOUNT, donation)
             expect(donation.donor).to.equal(this.alice.address)
             expect(donation.token).to.equal(this.token.address)
             expect(donation.gracePeriod).to.equal(TEST_GRACE_PERIOD)
