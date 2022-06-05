@@ -7,6 +7,8 @@ contract DisintermediatedGrants {
     address public immutable multisig;
     uint32 public immutable maxDonationGracePeriod;
 
+    bool public retired;
+
     uint256 public donationCount = 0;
     uint256 public grantCount = 0;
 
@@ -38,6 +40,12 @@ contract DisintermediatedGrants {
     event Donate(uint256 commitmentAmount, Donation donation);
     event ProposeGrant(Grant grant);
     event DisburseGrant(Grant grant);
+    event Retire();
+
+    modifier whenNotRetired() {
+        require(!retired, "contract has retired");
+        _;
+    }
 
     modifier onlyWhitelistedDonor() {
         require(donorWhitelisted[msg.sender], "caller is not whitelisted donor");
@@ -50,11 +58,12 @@ contract DisintermediatedGrants {
     }
 
     constructor(address _multisig, uint32 _maxDonationGracePeriod) {
+        retired = false;
         multisig = _multisig;
         maxDonationGracePeriod = _maxDonationGracePeriod;
     }
 
-    function whitelistDonor(address _donor) public onlyMultisig {
+    function whitelistDonor(address _donor) public whenNotRetired onlyMultisig {
         donorWhitelisted[_donor] = true;
         emit WhitelistDonor(_donor);
     }
@@ -63,7 +72,7 @@ contract DisintermediatedGrants {
         address _token,
         uint256 _commitmentAmount,
         uint32 _gracePeriod
-    ) public onlyWhitelistedDonor {
+    ) public whenNotRetired onlyWhitelistedDonor {
         require(_commitmentAmount > 0, "commitment amount cannot be zero");
         require(_gracePeriod <= maxDonationGracePeriod, "withdrawal grace period is too long");
         require(
@@ -87,7 +96,7 @@ contract DisintermediatedGrants {
         revert("deposits not permitted");
     }
 
-    function proposeGrant(GrantProposal memory _grantProposal) public onlyMultisig {
+    function proposeGrant(GrantProposal memory _grantProposal) public whenNotRetired onlyMultisig {
         require(_grantProposal.donationId < donationCount, "donation does not exist");
         Grant memory grant = Grant({
             donationId: _grantProposal.donationId,
@@ -126,5 +135,10 @@ contract DisintermediatedGrants {
 
         emit DisburseGrant(grant);
         ERC20(donation.token).transferFrom(donation.donor, grant.recipient, grant.amount);
+    }
+
+    function retire() public whenNotRetired onlyMultisig {
+        retired = true;
+        emit Retire();
     }
 }
