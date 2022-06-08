@@ -301,6 +301,17 @@ describe("DisintermediatedGrants", function () {
                 "insufficient donor balance"
             )
         })
+        it("fail if contract has retired", async function () {
+            await this.retire()
+            await this.token.connect(this.alice).approve(this.dg.address, TEST_DONATION_AMOUNT)
+            const donationId = await this.setDonation(this.defaultDonation)
+            const grantId = await this.setGrant({
+                ...this.defaultGrant,
+                donationId,
+                proposedAt: (await ethers.provider.getBlockNumber()) - this.defaultDonation.gracePeriod,
+            })
+            await expect(this.dg.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith("contract has retired")
+        })
         it("transfer grant amount to recipient", async function () {
             await this.token.connect(this.alice).approve(this.dg.address, TEST_DONATION_AMOUNT)
             const grantRecipientBalance = await this.token.balanceOf(this.bob.address)

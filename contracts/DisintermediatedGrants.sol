@@ -118,7 +118,7 @@ contract DisintermediatedGrants {
         }
     }
 
-    function disburseGrant(uint256 _grantId) public {
+    function disburseGrant(uint256 _grantId) public whenNotRetired {
         require(_grantId < grantCount, "grant does not exist");
         Grant storage grant = grants[_grantId];
         require(!grant.disbursed, "grant has already been disbursed");
