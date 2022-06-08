@@ -30,6 +30,10 @@ const setGrant = async (contract, grant, id) => {
     return grantId
 }
 
+const retire = async (contract) => {
+    await contract.setVariable("retired", true)
+}
+
 describe("DisintermediatedGrants", function () {
     before(async function () {
         const [deployer, multisig, alice, bob, eve] = await ethers.getSigners()
@@ -56,6 +60,7 @@ describe("DisintermediatedGrants", function () {
         this.whitelistDonor = (donor) => whitelistDonor(this.dg, donor)
         this.setDonation = (donation, id) => setDonation(this.dg, donation, id)
         this.setGrant = (grant, id) => setGrant(this.dg, grant, id)
+        this.retire = () => retire(this.dg)
         this.defaultDonation = {
             donor: this.alice.address,
             token: this.token.address,
@@ -74,6 +79,12 @@ describe("DisintermediatedGrants", function () {
             expect(await this.dg.donorWhitelisted(this.alice.address)).to.equal(false)
             await expect(this.dg.connect(this.eve).whitelistDonor(this.eve.address)).to.be.revertedWith(
                 "caller is not the multisig"
+            )
+        })
+        it("cannot be whitelisted if contract has retired", async function () {
+            await this.retire()
+            await expect(this.dg.connect(this.multisig).whitelistDonor(this.alice.address)).to.be.revertedWith(
+                "contract has retired"
             )
         })
         it("can be whitelisted by multisig", async function () {
@@ -138,6 +149,12 @@ describe("DisintermediatedGrants", function () {
                     .donate(this.token.address, TEST_DONATION_AMOUNT, (await this.dg.maxDonationGracePeriod()) + 1)
             ).to.be.revertedWith("withdrawal grace period is too long")
         })
+        it("fail if contract has retired", async function () {
+            await this.retire()
+            await expect(
+                this.dg.connect(this.alice).donate(this.token.address, TEST_DONATION_AMOUNT, TEST_GRACE_PERIOD)
+            ).to.be.revertedWith("contract has retired")
+        })
     })
     describe("grant proposals", function () {
         it("cannot be created by non-multisig", async function () {
@@ -174,6 +191,17 @@ describe("DisintermediatedGrants", function () {
             await expect(grant.disbursed).to.equal(false)
             await expect(grant.proposedAt).to.equal(tx.blockNumber)
             await expect(tx).to.emit(this.dg, "ProposeGrant").withArgs(grant)
+        })
+        it("fail if contract has retired", async function () {
+            await this.retire()
+            const donationId = await this.setDonation(this.defaultDonation)
+            await expect(
+                this.dg.connect(this.multisig).proposeGrant({
+                    donationId,
+                    recipient: this.bob.address,
+                    amount: TEST_DONATION_AMOUNT,
+                })
+            ).to.be.revertedWith("contract has retired")
         })
     })
     describe("multiple grant proposals", function () {
@@ -273,6 +301,17 @@ describe("DisintermediatedGrants", function () {
                 "insufficient donor balance"
             )
         })
+        it("fail if contract has retired", async function () {
+            await this.retire()
+            await this.token.connect(this.alice).approve(this.dg.address, TEST_DONATION_AMOUNT)
+            const donationId = await this.setDonation(this.defaultDonation)
+            const grantId = await this.setGrant({
+                ...this.defaultGrant,
+                donationId,
+                proposedAt: (await ethers.provider.getBlockNumber()) - this.defaultDonation.gracePeriod,
+            })
+            await expect(this.dg.connect(this.bob).disburseGrant(grantId)).to.be.revertedWith("contract has retired")
+        })
         it("transfer grant amount to recipient", async function () {
             await this.token.connect(this.alice).approve(this.dg.address, TEST_DONATION_AMOUNT)
             const grantRecipientBalance = await this.token.balanceOf(this.bob.address)
@@ -292,6 +331,15 @@ describe("DisintermediatedGrants", function () {
                 .to.emit(this.token, "Transfer")
                 .withArgs(this.alice.address, this.bob.address, grant.amount)
             expect(await this.token.balanceOf(this.bob.address)).to.equal(grantRecipientBalance.add(grant.amount))
+        })
+    })
+    describe("retirement", function () {
+        it("cannot be imposed by non-multisig", async function () {
+            await expect(this.dg.connect(this.eve).retire()).to.be.revertedWith("caller is not the multisig")
+        })
+        it("can be imposed by multisig", async function () {
+            await this.dg.connect(this.multisig).retire()
+            expect(await this.dg.retired()).to.equal(true)
         })
     })
     describe("native transfers", function () {
