@@ -63,7 +63,7 @@ contract DisintermediatedGrants {
         maxDonationGracePeriod = _maxDonationGracePeriod;
     }
 
-    function whitelistDonor(address _donor) public whenNotRetired onlyMultisig {
+    function whitelistDonor(address _donor) external whenNotRetired onlyMultisig {
         donorWhitelisted[_donor] = true;
         emit WhitelistDonor(_donor);
     }
@@ -72,7 +72,7 @@ contract DisintermediatedGrants {
         address _token,
         uint256 _commitmentAmount,
         uint32 _gracePeriod
-    ) public whenNotRetired onlyWhitelistedDonor {
+    ) external whenNotRetired onlyWhitelistedDonor {
         require(_commitmentAmount > 0, "commitment amount cannot be zero");
         require(_gracePeriod <= maxDonationGracePeriod, "withdrawal grace period is too long");
         require(
@@ -112,13 +112,13 @@ contract DisintermediatedGrants {
         emit ProposeGrant(grant);
     }
 
-    function proposeGrants(GrantProposal[] memory _grantProposals) public {
+    function proposeGrants(GrantProposal[] memory _grantProposals) external {
         for (uint16 i = 0; i < _grantProposals.length; i++) {
             proposeGrant(_grantProposals[i]);
         }
     }
 
-    function disburseGrant(uint256 _grantId) public whenNotRetired {
+    function disburseGrant(uint256 _grantId) external whenNotRetired {
         require(_grantId < grantCount, "grant does not exist");
         Grant storage grant = grants[_grantId];
         require(!grant.disbursed, "grant has already been disbursed");
@@ -137,7 +137,7 @@ contract DisintermediatedGrants {
         ERC20(donation.token).transferFrom(donation.donor, grant.recipient, grant.amount);
     }
 
-    function retire() public whenNotRetired onlyMultisig {
+    function retire() external whenNotRetired onlyMultisig {
         retired = true;
         emit Retire();
     }
