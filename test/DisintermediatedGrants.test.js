@@ -117,22 +117,6 @@ describe("DisintermediatedGrants", function () {
                 this.dg.connect(this.alice).donate(this.token.address, donorBalance, TEST_GRACE_PERIOD)
             ).to.be.revertedWith("insufficient allowance to cover commitment amount")
         })
-        it("can be made by whitelisted donors", async function () {
-            const initialDonorBalance = await this.token.balanceOf(this.alice.address)
-            await this.whitelistDonor(this.alice.address)
-            await this.token.connect(this.alice).approve(this.dg.address, TEST_DONATION_AMOUNT)
-            const donationCount = await this.dg.donationCount()
-            const tx = await this.dg
-                .connect(this.alice)
-                .donate(this.token.address, TEST_DONATION_AMOUNT, TEST_GRACE_PERIOD)
-            const donation = await this.dg.donations(donationCount)
-            await expect(tx).to.emit(this.dg, "Donate").withArgs(TEST_DONATION_AMOUNT, donation)
-            expect(donation.donor).to.equal(this.alice.address)
-            expect(donation.token).to.equal(this.token.address)
-            expect(donation.gracePeriod).to.equal(TEST_GRACE_PERIOD)
-            expect(await this.token.allowance(donation.donor, this.dg.address)).to.equal(TEST_DONATION_AMOUNT)
-            expect(await this.token.balanceOf(this.alice.address)).to.equal(initialDonorBalance)
-        })
         it("fail if commitment is zero", async function () {
             await this.whitelistDonor(this.alice.address)
             const donationCount = await this.dg.donationCount()
@@ -155,6 +139,22 @@ describe("DisintermediatedGrants", function () {
                 this.dg.connect(this.alice).donate(this.token.address, TEST_DONATION_AMOUNT, TEST_GRACE_PERIOD)
             ).to.be.revertedWith("contract has retired")
         })
+        it("can be made by whitelisted donors", async function () {
+            const initialDonorBalance = await this.token.balanceOf(this.alice.address)
+            await this.whitelistDonor(this.alice.address)
+            await this.token.connect(this.alice).approve(this.dg.address, TEST_DONATION_AMOUNT)
+            const donationCount = await this.dg.donationCount()
+            const tx = await this.dg
+                .connect(this.alice)
+                .donate(this.token.address, TEST_DONATION_AMOUNT, TEST_GRACE_PERIOD)
+            const donation = await this.dg.donations(donationCount)
+            await expect(tx).to.emit(this.dg, "Donate").withArgs(TEST_DONATION_AMOUNT, donation)
+            expect(donation.donor).to.equal(this.alice.address)
+            expect(donation.token).to.equal(this.token.address)
+            expect(donation.gracePeriod).to.equal(TEST_GRACE_PERIOD)
+            expect(await this.token.allowance(donation.donor, this.dg.address)).to.equal(TEST_DONATION_AMOUNT)
+            expect(await this.token.balanceOf(this.alice.address)).to.equal(initialDonorBalance)
+        })
     })
     describe("grant proposals", function () {
         it("cannot be created by non-multisig", async function () {
@@ -176,6 +176,17 @@ describe("DisintermediatedGrants", function () {
                 })
             ).to.be.revertedWith("donation does not exist")
         })
+        it("fail if contract has retired", async function () {
+            await this.retire()
+            const donationId = await this.setDonation(this.defaultDonation)
+            await expect(
+                this.dg.connect(this.multisig).proposeGrant({
+                    donationId,
+                    recipient: this.bob.address,
+                    amount: TEST_DONATION_AMOUNT,
+                })
+            ).to.be.revertedWith("contract has retired")
+        })
         it("can be created by multisig", async function () {
             const donationId = await this.setDonation(this.defaultDonation)
             const grantCount = await this.dg.grantCount()
@@ -191,17 +202,6 @@ describe("DisintermediatedGrants", function () {
             await expect(grant.disbursed).to.equal(false)
             await expect(grant.proposedAt).to.equal(tx.blockNumber)
             await expect(tx).to.emit(this.dg, "ProposeGrant").withArgs(grant)
-        })
-        it("fail if contract has retired", async function () {
-            await this.retire()
-            const donationId = await this.setDonation(this.defaultDonation)
-            await expect(
-                this.dg.connect(this.multisig).proposeGrant({
-                    donationId,
-                    recipient: this.bob.address,
-                    amount: TEST_DONATION_AMOUNT,
-                })
-            ).to.be.revertedWith("contract has retired")
         })
     })
     describe("multiple grant proposals", function () {
